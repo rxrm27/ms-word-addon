@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+
+  <Id>4f9c3a2e-b1d8-4e7f-9a3c-2b5d8e1f4c7a</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Patent Tools</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Patent Reference Checker"/>
+  <Description DefaultValue="Detect reference number conflicts in patent specifications and generate a reference table."/>
+  <IconUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-80.png"/>
+  <SupportUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/"/>
+
+  <AppDomains>
+    <AppDomain>rxrm27.github.io</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Document"/>
+  </Hosts>
+
+  <Requirements>
+    <Sets>
+      <Set Name="WordApi" MinVersion="1.4"/>
+    </Sets>
+  </Requirements>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://rxrm27.github.io/ms-word-addon/src/taskpane.html"/>
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <FunctionFile resid="Commands.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="PatentToolsGroup">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.32"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="ShowCheckerBtn">
+                  <Label resid="Btn.Label"/>
+                  <Supertip>
+                    <Title resid="Btn.Label"/>
+                    <Description resid="Btn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.32"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>PatentCheckerPane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url"/>
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.32" DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url"  DefaultValue="https://rxrm27.github.io/ms-word-addon/src/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://rxrm27.github.io/ms-word-addon/src/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Group.Label"   DefaultValue="Patent Tools"/>
+        <bt:String id="Btn.Label"     DefaultValue="Check References"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Btn.Tooltip" DefaultValue="Open the patent reference number checker"/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
