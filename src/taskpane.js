@@ -104,8 +104,65 @@ function renderDictionary(table) {
   });
 }
 
-// ── Mark conflicts — stub, replaced in Task 7 ────────────────────────────────
-function markConflicts() { setStatus('Mark Conflicts not yet implemented.', 'error'); }
+// ── Mark conflicts ────────────────────────────────────────────────────────────
+
+function markConflicts() {
+  if (!scanResult || !scanResult.conflicts.length) {
+    setStatus('Run Scan first.', 'error');
+    return;
+  }
+
+  setStatus('Adding comments to document...');
+
+  var searches = [];
+
+  scanResult.conflicts.forEach(function (conflict) {
+    if (conflict.type === 'number_reuse') {
+      conflict.phrases.forEach(function (phrase) {
+        var term = phrase + ' ' + conflict.number;
+        var otherPhrases = conflict.phrases.filter(function (p) { return p !== phrase; });
+        searches.push({
+          term: term,
+          comment: 'CONFLICT: number ' + conflict.number + ' also used for "' + otherPhrases.join('", "') + '"'
+        });
+      });
+    } else if (conflict.type === 'phrase_reuse') {
+      conflict.numbers.forEach(function (num) {
+        var term = conflict.phrase + ' ' + num;
+        var otherNums = conflict.numbers.filter(function (n) { return n !== num; });
+        searches.push({
+          term: term,
+          comment: 'CONFLICT: "' + conflict.phrase + '" also numbered as ' + otherNums.join(', ')
+        });
+      });
+    }
+  });
+
+  var totalMarked = 0;
+  var promise = Word.run(function (ctx) { return ctx.sync(); });
+
+  searches.forEach(function (s) {
+    promise = promise.then(function () {
+      return Word.run(function (innerCtx) {
+        var ranges = innerCtx.document.body.search(s.term, { matchCase: false });
+        ranges.load('items');
+        return innerCtx.sync().then(function () {
+          ranges.items.forEach(function (range) {
+            range.insertComment(s.comment);
+            totalMarked++;
+          });
+          return innerCtx.sync();
+        });
+      });
+    });
+  });
+
+  promise.then(function () {
+    setStatus('Added comments to ' + totalMarked + ' location(s). Review in the Comments pane.', 'success');
+  }).catch(function (err) {
+    setStatus('Error marking conflicts: ' + err.message, 'error');
+  });
+}
 
 // ── Generate table — stub, replaced in Task 8 ────────────────────────────────
 function generateTable() { setStatus('Generate Table not yet implemented.', 'error'); }
