@@ -14,8 +14,8 @@
   ];
 
   // Capture: up to 6 words (letters/hyphens) then a 3-4 digit ref number (with optional sub-part).
-  // Negative lookahead prevents matching numbers immediately followed by / . , or another digit.
-  var REF_PAT = /\b([A-Za-z][A-Za-z\-]*(?:\s+[A-Za-z][A-Za-z\-]*){0,5})\s+(\d{3,4}(?:-\d+)?)\b(?![\/.,\d])/g;
+  // Negative lookahead prevents matching numbers followed by / or another digit (patent/version nums).
+  var REF_PAT = /\b([A-Za-z][A-Za-z\-]*(?:\s+[A-Za-z][A-Za-z\-]*){0,5})\s+(\d{3,4}(?:-\d+)?)\b(?![\/\d])/g;
 
   function cleanText(text) {
     var s = text;
@@ -23,12 +23,16 @@
     return s;
   }
 
+  // Words that are never a component name start — stripped from captured phrase prefix.
+  var STOPWORD = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said)$/i;
+
   function normalizePhrase(raw) {
-    return raw
-      .toLowerCase()
-      .replace(/^\s*(?:a|an|the)\s+/, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    var words = raw.toLowerCase().replace(/\s+/g, ' ').trim().split(' ');
+    // Strip leading stopwords (including articles) until a content word is found.
+    while (words.length > 1 && STOPWORD.test(words[0])) words.shift();
+    // One more article strip in case of "and an X" pattern.
+    if (words.length > 1 && /^(?:a|an|the)$/.test(words[0])) words.shift();
+    return words.join(' ');
   }
 
   // Returns array of { phrase, number, rawMatch, position }
