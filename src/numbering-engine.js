@@ -19,6 +19,8 @@
 
   function cleanText(text) {
     var s = text;
+    // Normalize parenthesized ref numbers: "module (204)" → "module  204 "
+    s = s.replace(/\((\d{3,4}(?:-\d+)?)\)/g, ' $1 ');
     for (var i = 0; i < SKIP.length; i++) s = s.replace(SKIP[i], ' ');
     return s;
   }
