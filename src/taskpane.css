@@ -139,6 +139,9 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 11px;
   margin: 2px 2px 2px 0;
 }
+.clickable-chip { cursor: pointer; }
+.clickable-chip:hover { filter: brightness(0.92); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+
 .num-chip {
   display: inline-block;
   background: #e8f0fe;

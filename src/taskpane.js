@@ -164,8 +164,12 @@ function renderConflicts(conflicts) {
 
       displayPhrases.forEach(function (p) {
         var chip       = document.createElement('span');
-        chip.className = 'phrase-chip';
+        chip.className = 'phrase-chip clickable-chip';
         chip.textContent = p;
+        chip.title = 'Click to scroll to in document';
+        chip.onclick = (function (phrase, num) {
+          return function () { scrollToPhrase(phrase, num); };
+        })(p, c.number);
         tdChips.appendChild(chip);
       });
     } else {
@@ -176,8 +180,12 @@ function renderConflicts(conflicts) {
 
       c.numbers.forEach(function (n) {
         var chip       = document.createElement('span');
-        chip.className = 'num-chip';
+        chip.className = 'num-chip clickable-chip';
         chip.textContent = n;
+        chip.title = 'Click to scroll to in document';
+        chip.onclick = (function (phrase, num) {
+          return function () { scrollToPhrase(phrase, num); };
+        })(c.phrase, n);
         tdChips.appendChild(chip);
       });
     }
@@ -325,6 +333,27 @@ function doRemoveAlias(number, phrase, canonical) {
   if (cell) renderAliasChips(cell, number, canonical);
 
   if (scanResult) { renderConflicts(scanResult.conflicts); refreshStatus(); }
+}
+
+// ── Scroll to phrase in document ─────────────────────────────────────────────
+
+function scrollToPhrase(phrase, number) {
+  var term = phrase + ' ' + number;
+  setStatus('Scrolling to: ' + term + '...');
+  Word.run(function (ctx) {
+    var ranges = ctx.document.body.search(term, { matchCase: false });
+    ranges.load('items');
+    return ctx.sync().then(function () {
+      if (ranges.items.length > 0) {
+        ranges.items[0].select();
+        return ctx.sync().then(function () { setStatus('Found: ' + term, 'success'); });
+      } else {
+        setStatus('Not found in document: ' + term, 'error');
+      }
+    });
+  }).catch(function (err) {
+    setStatus('Error scrolling: ' + err.message, 'error');
+  });
 }
 
 // ── Mark conflicts ────────────────────────────────────────────────────────────
