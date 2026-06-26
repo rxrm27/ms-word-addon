@@ -111,3 +111,105 @@ button:disabled { opacity: 0.45; cursor: default; }
   color: #5f6368;
 }
 #dict-table tr:nth-child(even) td { background: #fafafa; }
+
+/* ── Conflict table ──────────────────────────────────────────────────────── */
+.conflict-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.conflict-row td { padding: 5px 6px; border-bottom: 1px solid #fce8e6; vertical-align: top; }
+.conflict-row:first-child td { border-top: 1px solid #fce8e6; }
+
+.conflict-label-cell { width: 52px; white-space: nowrap; padding-top: 7px !important; }
+.conflict-num {
+  display: inline-block;
+  background: #fce8e6;
+  color: #c62828;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.conflict-phrase { color: #c62828; font-size: 11px; }
+
+.phrase-chip {
+  display: inline-block;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  color: #b45309;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin: 2px 2px 2px 0;
+}
+.num-chip {
+  display: inline-block;
+  background: #e8f0fe;
+  border: 1px solid #aecbfa;
+  color: #1a73e8;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  margin: 2px 2px 2px 0;
+}
+
+/* ── Alias chips ─────────────────────────────────────────────────────────── */
+.alias-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #e6f4ea;
+  border: 1px solid #81c995;
+  color: #137333;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 11px;
+  margin: 1px 2px 1px 0;
+}
+.chip-remove {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #137333;
+  opacity: 0.55;
+}
+.chip-remove:hover { opacity: 1; }
+
+/* ── Dict table edit column ──────────────────────────────────────────────── */
+.alias-cell { max-width: 110px; }
+.edit-cell { width: 26px; text-align: center; padding: 0 !important; }
+
+.icon-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  display: inline-block;
+}
+.icon-btn:hover { background: #f1f3f4; }
+
+/* ── Alias input row ─────────────────────────────────────────────────────── */
+.alias-input-row td { padding: 5px 8px; background: #f8f9fa; border-bottom: 1px solid #e8eaed; }
+.alias-input {
+  width: calc(100% - 54px);
+  padding: 4px 7px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.alias-input:focus { border-color: #1a73e8; }
+.alias-add-btn {
+  padding: 4px 10px;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.alias-add-btn:hover { background: #1557b0; }
