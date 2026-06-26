@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <title>Numbering Engine Tests</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #fafafa; }
+    h1 { font-size: 18px; margin-bottom: 16px; }
+    .pass { color: #2e7d32; }
+    .fail { color: #c62828; font-weight: bold; }
+    .section { border-top: 1px solid #ccc; margin: 12px 0 6px; font-weight: bold; font-size: 13px; color: #555; padding-top: 8px; }
+    #summary { font-size: 16px; font-weight: bold; margin-top: 16px; padding: 8px; border-radius: 4px; }
+    .all-pass { background: #e8f5e9; color: #2e7d32; }
+    .has-fail { background: #ffebee; color: #c62828; }
+  </style>
+</head>
+<body>
+<h1>Numbering Engine Tests</h1>
+<div id="results"></div>
+<script src="../src/numbering-engine.js"></script>
+<script>
+  var passed = 0, failed = 0;
+  var results = document.getElementById('results');
+
+  function assert(condition, message) {
+    var div = document.createElement('div');
+    if (condition) {
+      div.className = 'pass'; div.textContent = '✓ ' + message; passed++;
+    } else {
+      div.className = 'fail'; div.textContent = '✗ FAIL: ' + message; failed++;
+    }
+    results.appendChild(div);
+  }
+
+  function section(name) {
+    var div = document.createElement('div');
+    div.className = 'section'; div.textContent = name;
+    results.appendChild(div);
+  }
+
+  // ── Parse: basic component references ──
+  section('Parse — basic');
+  var t1 = 'The system 100 comprises an interface 102, an intelligent flow framework module 104, and an artificial intelligent module 106.';
+  var e1 = NumberingEngine.parse(t1);
+  assert(e1.length === 4, 'Finds 4 component references');
+  assert(e1[0].number === '100', 'First number is 100');
+  assert(e1[0].phrase === 'system', 'First phrase is "system"');
+  assert(e1[1].number === '102', 'Second number is 102');
+  assert(e1[1].phrase === 'interface', 'Second phrase is "interface"');
+  assert(e1[2].phrase === 'intelligent flow framework module', 'Multi-word phrase captured');
+  assert(e1[3].number === '106', 'Fourth number is 106');
+
+  // ── Parse: article stripping ──
+  section('Parse — article stripping');
+  var t2 = 'The interface 102 receives events. An interface 102 generates an event.';
+  var e2 = NumberingEngine.parse(t2);
+  assert(e2.every(function(e) { return e.phrase === 'interface'; }), 'Articles stripped, phrase normalized to "interface"');
+
+  // ── Parse: figure reference exclusion ──
+  section('Parse — FIG exclusion');
+  var t3 = 'FIG. 1 illustrates a system 100. FIG.2(A) shows interface 102. See Figure 3.';
+  var e3 = NumberingEngine.parse(t3);
+  assert(e3.some(function(e) { return e.number === '100'; }), '"system 100" found despite FIG. in same text');
+  assert(e3.some(function(e) { return e.number === '102'; }), '"interface 102" found');
+  assert(!e3.some(function(e) { return e.number === '1' || e.number === '2' || e.number === '3'; }),
+    'No false positives from FIG. 1 / FIG.2 / Figure 3');
+
+  // ── Parse: patent number / date exclusion ──
+  section('Parse — patent/date exclusion');
+  var t4 = 'No. 18/413,382, filed January 16, 2024. Provisional No. 63/466,271, May 13, 2023.';
+  var e4 = NumberingEngine.parse(t4);
+  assert(e4.length === 0, 'No false positives from patent numbers and dates');
+
+  // ── Parse: sub-component numbers (202-1) ──
+  section('Parse — sub-component numbers');
+  var t5 = 'The interface 202 includes user devices 202-1, mobile applications 202-2.';
+  var e5 = NumberingEngine.parse(t5);
+  assert(e5.some(function(e) { return e.number === '202'; }), '"interface 202" found');
+  assert(e5.some(function(e) { return e.number === '202-1'; }), '"user devices 202-1" found');
+  assert(e5.some(function(e) { return e.number === '202-2'; }), '"mobile applications 202-2" found');
+
+  // ── Conflict: number used for two different phrases ──
+  section('Conflict — number reuse');
+  var t6 = 'The interface 102 receives events. The module 102 processes data.';
+  var r6 = NumberingEngine.analyze(t6);
+  assert(r6.conflicts.length === 1, 'Exactly 1 conflict detected');
+  assert(r6.conflicts[0].type === 'number_reuse', 'Type is number_reuse');
+  assert(r6.conflicts[0].number === '102', 'Conflict on number 102');
+  assert(r6.conflicts[0].phrases.indexOf('interface') !== -1, 'Phrases include "interface"');
+  assert(r6.conflicts[0].phrases.indexOf('module') !== -1, 'Phrases include "module"');
+
+  // ── Conflict: same phrase used with two different numbers ──
+  section('Conflict — phrase reuse');
+  var t7 = 'The interface 102 handles input. The interface 202 handles output.';
+  var r7 = NumberingEngine.analyze(t7);
+  assert(r7.conflicts.length === 1, 'Exactly 1 conflict detected');
+  assert(r7.conflicts[0].type === 'phrase_reuse', 'Type is phrase_reuse');
+  assert(r7.conflicts[0].phrase === 'interface', 'Conflict on phrase "interface"');
+  assert(r7.conflicts[0].numbers.indexOf('102') !== -1, 'Numbers include 102');
+  assert(r7.conflicts[0].numbers.indexOf('202') !== -1, 'Numbers include 202');
+
+  // ── No false conflict: same phrase + same number throughout ──
+  section('No false conflict');
+  var t8 = 'The interface 102 receives an event. The interface 102 generates an event. The interface 102 is coupled to module 104.';
+  var r8 = NumberingEngine.analyze(t8);
+  assert(r8.conflicts.length === 0, 'No conflicts when phrase-number pairs are consistent');
+
+  // ── Reference table: sorted by number ──
+  section('Reference table');
+  var t9 = 'The module 104 and interface 102 and system 100 are described.';
+  var r9 = NumberingEngine.analyze(t9);
+  assert(r9.referenceTable.length === 3, 'Reference table has 3 entries');
+  assert(r9.referenceTable[0].number === '100', 'Sorted: first is 100');
+  assert(r9.referenceTable[1].number === '102', 'Sorted: second is 102');
+  assert(r9.referenceTable[2].number === '104', 'Sorted: third is 104');
+
+  // ── Summary ──
+  var summary = document.createElement('div');
+  summary.id = 'summary';
+  summary.className = failed === 0 ? 'all-pass' : 'has-fail';
+  summary.textContent = passed + ' passed, ' + failed + ' failed';
+  results.appendChild(summary);
+</script>
+</body>
+</html>
