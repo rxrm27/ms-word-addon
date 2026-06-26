@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>Patent Reference Checker</title>
+  <link rel="stylesheet" href="taskpane.css"/>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div id="header">
+      <span id="header-icon">&#9632;</span>
+      <h1>Reference Checker</h1>
+    </div>
+
+    <div id="controls">
+      <button id="btn-scan">&#128269; Scan Document</button>
+      <button id="btn-mark" class="secondary" disabled>&#128204; Mark Conflicts in Doc</button>
+      <button id="btn-table" class="secondary" disabled>&#128203; Insert Reference Table</button>
+    </div>
+
+    <div id="status">Open a patent specification document, then click Scan.</div>
+
+    <div id="conflicts-section" class="hidden">
+      <div class="section-header">
+        <span class="badge red" id="conflict-count">0</span>
+        Conflicts
+      </div>
+      <ul id="conflicts-list"></ul>
+    </div>
+
+    <div id="dictionary-section" class="hidden">
+      <div class="section-header">
+        <span class="badge blue" id="dict-count">0</span>
+        Reference Dictionary
+      </div>
+      <table id="dict-table">
+        <thead>
+          <tr><th>Number</th><th>Component</th></tr>
+        </thead>
+        <tbody id="dict-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="numbering-engine.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>
