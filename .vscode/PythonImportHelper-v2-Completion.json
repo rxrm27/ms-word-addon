@@ -1,0 +1,29 @@
+[
+    {
+        "label": "struct,",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "struct.",
+        "description": "struct.",
+        "detail": "struct.",
+        "documentation": {}
+    },
+    {
+        "label": "make_png",
+        "kind": 2,
+        "importPath": "generate-icons",
+        "description": "generate-icons",
+        "peekOfCode": "def make_png(w, h, r, g, b):\n    \"\"\"Create a minimal solid-color PNG.\"\"\"\n    def chunk(tag, data):\n        c = struct.pack('>I', len(data)) + tag + data\n        return c + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff)\n    ihdr = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)\n    raw = b''.join(b'\\x00' + bytes([r, g, b] * w) for _ in range(h))\n    return (b'\\x89PNG\\r\\n\\x1a\\n'\n            + chunk(b'IHDR', ihdr)\n            + chunk(b'IDAT', zlib.compress(raw))",
+        "detail": "generate-icons",
+        "documentation": {}
+    },
+    {
+        "label": "out",
+        "kind": 5,
+        "importPath": "generate-icons",
+        "description": "generate-icons",
+        "peekOfCode": "out = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')\nos.makedirs(out, exist_ok=True)\nfor size, name in [(32, 'icon-32.png'), (80, 'icon-80.png')]:\n    with open(os.path.join(out, name), 'wb') as f:\n        f.write(make_png(size, size, 26, 115, 232))  # #1a73e8 blue\n    print(f\"Created assets/{name}\")",
+        "detail": "generate-icons",
+        "documentation": {}
+    }
+]
