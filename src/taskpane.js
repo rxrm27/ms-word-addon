@@ -164,5 +164,43 @@ function markConflicts() {
   });
 }
 
-// ── Generate table — stub, replaced in Task 8 ────────────────────────────────
-function generateTable() { setStatus('Generate Table not yet implemented.', 'error'); }
+// ── Generate reference table ──────────────────────────────────────────────────
+
+function generateTable() {
+  if (!scanResult) {
+    setStatus('Run Scan first.', 'error');
+    return;
+  }
+
+  var tableData = scanResult.referenceTable;
+  if (tableData.length === 0) {
+    setStatus('No references found to tabulate.', 'error');
+    return;
+  }
+
+  setStatus('Inserting reference table...');
+
+  Word.run(function (ctx) {
+    var body = ctx.document.body;
+
+    var heading = body.insertParagraph('Reference Numerals', Word.InsertLocation.end);
+    heading.styleBuiltIn = Word.Style.heading2;
+
+    var values = [['Reference Number', 'Component Name']];
+    tableData.forEach(function (row) {
+      values.push([row.number, row.phrase]);
+    });
+
+    var table = body.insertTable(values.length, 2, Word.InsertLocation.end, values);
+    table.style = 'Table Grid';
+
+    var headerRow = table.rows.getFirst();
+    headerRow.font.bold = true;
+
+    return ctx.sync().then(function () {
+      setStatus('Reference table inserted at end of document (' + tableData.length + ' entries).', 'success');
+    });
+  }).catch(function (err) {
+    setStatus('Error inserting table: ' + err.message, 'error');
+  });
+}
