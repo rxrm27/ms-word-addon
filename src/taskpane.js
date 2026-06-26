@@ -44,10 +44,17 @@ function refreshStatus() {
 // Words that carry no identifying meaning.
 var CONTENT_STOP = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|had|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said|may|can|its|via|into|onto|about|within|between|through|across|among|upon|after|before|during|whether|wherein|thereby|whereby|thereof|therein|therefor|therefore)$/i;
 
+function stemWord(w) {
+  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y'; // abilities→ability
+  if (w.length > 4 && w.endsWith('ses')) return w.slice(0, -2);        // processes→process
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1); // users→user
+  return w;
+}
+
 function getContentWords(phrase) {
   return phrase.toLowerCase().split(/\s+/).filter(function (w) {
     return w.length > 1 && !CONTENT_STOP.test(w);
-  });
+  }).map(stemWord);
 }
 
 function sharesContentWord(phrase, canonical) {
