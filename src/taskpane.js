@@ -1,9 +1,10 @@
 // src/taskpane.js
 'use strict';
 
-var scanResult = null;
-var aliasMap    = {};   // manually added by user
-var autoAliasMap = {};  // auto-computed: phrases that share a content word with canonical
+var scanResult       = null;
+var aliasMap         = {};   // manually added by user
+var autoAliasMap     = {};   // auto-computed: phrases that share a content word with canonical
+var canonicalOverride = {};  // user-edited canonical phrase per number
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -65,18 +66,35 @@ function sharesContentWord(phrase, canonical) {
   return phraseWords.some(function (w) { return canonicalWords.indexOf(w) !== -1; });
 }
 
+function getOriginalCanonical(number) {
+  if (!scanResult) return '';
+  var row = scanResult.referenceTable.filter(function (r) { return r.number === number; })[0];
+  return row ? row.phrase : '';
+}
+
+function getCanonical(number) {
+  return canonicalOverride[number] || getOriginalCanonical(number);
+}
+
+function saveCanonical(number, newPhrase) {
+  var oldCanonical = getCanonical(number);
+  canonicalOverride[number] = newPhrase;
+  // Replace old canonical in aliasMap if present
+  if (aliasMap[number]) {
+    var idx = aliasMap[number].indexOf(oldCanonical);
+    if (idx !== -1) aliasMap[number][idx] = newPhrase;
+  }
+  if (scanResult) { buildAutoAliases(scanResult); renderResults(scanResult); refreshStatus(); }
+}
+
 function buildAutoAliases(result) {
   autoAliasMap = {};
   var n2p      = result.dictionary.numberToPhrase;
-  var refTable = result.referenceTable;
-
-  var numToCanonical = {};
-  refTable.forEach(function (r) { numToCanonical[r.number] = r.phrase; });
 
   Object.keys(n2p).forEach(function (num) {
     var phrases   = n2p[num];
     if (phrases.length <= 1) return;
-    var canonical = numToCanonical[num];
+    var canonical = getCanonical(num);
     if (!canonical) return;
 
     phrases.forEach(function (p) {
@@ -216,7 +234,7 @@ function renderDictionary(table) {
   badge.textContent = table.length;
 
   table.forEach(function (row) {
-    var canonical = row.phrase;
+    var canonical = getCanonical(row.number);
 
     var tr = document.createElement('tr');
     tr.dataset.number = row.number;
@@ -226,6 +244,19 @@ function renderDictionary(table) {
 
     var tdPhrase = document.createElement('td');
     tdPhrase.textContent = canonical;
+    tdPhrase.contentEditable = true;
+    tdPhrase.className = 'component-editable';
+    tdPhrase.title = 'Click to edit component name';
+    tdPhrase.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+      if (e.key === 'Escape') { this.textContent = getCanonical(row.number); this.blur(); }
+    });
+    tdPhrase.addEventListener('blur', (function (num) {
+      return function () {
+        var newVal = this.textContent.trim().toLowerCase();
+        if (newVal && newVal !== getCanonical(num)) saveCanonical(num, newVal);
+      };
+    })(row.number));
 
     var tdAliases    = document.createElement('td');
     tdAliases.className = 'alias-cell';
