@@ -121,7 +121,6 @@
       return;
     }
 
-    // Sort: errors first, then warnings, then info
     var sorted = findings.slice().sort(function (a, b) {
       var order = { error: 0, warning: 1, info: 2 };
       var diff  = (order[a.severity] || 2) - (order[b.severity] || 2);
@@ -145,8 +144,7 @@
 
     var chips = el('typeChips');
     chips.innerHTML = '';
-    var types = Object.keys(metrics.byType);
-    types.forEach(function (t) {
+    Object.keys(metrics.byType).forEach(function (t) {
       var count = metrics.byType[t];
       if (count === 0) return;
       var chip = document.createElement('span');
@@ -158,54 +156,152 @@
     el('metricsSection').classList.remove('hidden');
   }
 
-  // ── Main scan ──────────────────────────────────────────────────────────────
+  // ── Paragraph reconstruction ───────────────────────────────────────────────
+  // Word numbered lists don't include the number in paragraph.text —
+  // they're formatting metadata. We reconstruct "N. text" for level-0 list items.
+
+  function buildTextFromParagraphs(items) {
+    var listCounters = [0, 0, 0, 0];
+    return items.map(function (p) {
+      var li = p.listItemOrNullObject;
+      if (li && !li.isNullObject) {
+        var level = (typeof li.level === 'number') ? li.level : 0;
+        // Reset deeper level counters when shallower level increments
+        for (var k = level + 1; k < listCounters.length; k++) listCounters[k] = 0;
+        listCounters[level]++;
+        if (level === 0) {
+          // Top-level list item → prepend claim number
+          return listCounters[0] + '. ' + p.text;
+        }
+        // Nested items (claim body elements) — keep as indented text
+        return '  ' + p.text;
+      }
+      return p.text;
+    }).join('\n');
+  }
+
+  // ── Render results ─────────────────────────────────────────────────────────
+
+  function renderResult(result) {
+    if (result.error === 'no_claims_section') {
+      setStatus(
+        'Could not detect Claims section. Place your cursor on the first claim line and click "Analyze from Cursor".',
+        true
+      );
+      el('cursorHint').classList.remove('hidden');
+      return;
+    }
+    if (result.error === 'no_claims_found') {
+      setStatus('Claims section found but no numbered claims detected (e.g. "1. An apparatus…").', true);
+      return;
+    }
+
+    renderMetrics(result.metrics);
+
+    CATEGORIES.forEach(function (cat) {
+      renderCategory(cat.key, result.findings[cat.key] || []);
+    });
+
+    var total = Object.keys(result.findings).reduce(function (sum, k) {
+      return sum + result.findings[k].length;
+    }, 0);
+
+    el('cursorHint').classList.add('hidden');
+    setStatus('Found ' + result.metrics.total + ' claims · ' + total + ' finding' + (total !== 1 ? 's' : ''));
+    el('findingsArea').classList.remove('hidden');
+  }
+
+  function resetUI(scanningLabel) {
+    var btn = el('scanBtn');
+    btn.disabled    = true;
+    btn.textContent = scanningLabel || 'Scanning…';
+    var curBtn = el('cursorBtn');
+    if (curBtn) { curBtn.disabled = true; }
+    el('metricsSection').classList.add('hidden');
+    el('findingsArea').classList.add('hidden');
+    el('statusBar').classList.add('hidden');
+    el('cursorHint').classList.add('hidden');
+  }
+
+  function restoreUI() {
+    var btn = el('scanBtn');
+    btn.disabled    = false;
+    btn.textContent = 'Scan Claims';
+    var curBtn = el('cursorBtn');
+    if (curBtn) { curBtn.disabled = false; }
+  }
+
+  // ── Auto scan (full document) ──────────────────────────────────────────────
 
   function scanClaims() {
     var jurisdiction = el('jurisdictionSelect').value;
     saveState(jurisdiction);
-
-    var btn = el('scanBtn');
-    btn.disabled = true;
-    btn.textContent = 'Scanning…';
-    el('metricsSection').classList.add('hidden');
-    el('findingsArea').classList.add('hidden');
-    el('statusBar').classList.add('hidden');
+    resetUI('Scanning…');
 
     Word.run(function (context) {
-      var body = context.document.body;
-      body.load('text');
+      var paragraphs = context.document.body.paragraphs;
+      paragraphs.load('text, listItemOrNullObject/level');
+
       return context.sync().then(function () {
-        var text   = body.text;
+        var text   = buildTextFromParagraphs(paragraphs.items);
         var result = ClaimEngine.analyze(text, jurisdiction);
-
-        if (result.error === 'no_claims_section') {
-          setStatus('No "Claims" section found. Add a paragraph reading exactly "Claims" before your numbered claims.', true);
-          return;
-        }
-        if (result.error === 'no_claims_found') {
-          setStatus('Found a Claims section but no numbered claims (e.g., "1. An apparatus…").', true);
-          return;
-        }
-
-        renderMetrics(result.metrics);
-
-        CATEGORIES.forEach(function (cat) {
-          renderCategory(cat.key, result.findings[cat.key] || []);
-        });
-
-        var total = Object.keys(result.findings).reduce(function (sum, k) {
-          return sum + result.findings[k].length;
-        }, 0);
-
-        setStatus('Found ' + result.metrics.total + ' claims · ' + total + ' finding' + (total !== 1 ? 's' : ''));
-        el('findingsArea').classList.remove('hidden');
+        renderResult(result);
       });
     }).catch(function (err) {
       setStatus('Error: ' + (err.message || err), true);
-    }).finally(function () {
-      btn.disabled    = false;
-      btn.textContent = 'Scan Claims';
-    });
+    }).finally(restoreUI);
+  }
+
+  // ── Cursor scan (from insertion point to end) ──────────────────────────────
+
+  function scanFromCursor() {
+    var jurisdiction = el('jurisdictionSelect').value;
+    saveState(jurisdiction);
+    resetUI('Scanning from cursor…');
+
+    Word.run(function (context) {
+      var sel        = context.document.getSelection();
+      var allParas   = context.document.body.paragraphs;
+      var selParas   = sel.paragraphs;
+
+      allParas.load('text, listItemOrNullObject/level');
+      selParas.load('text');
+
+      return context.sync().then(function () {
+        // Find the paragraph index where the cursor/selection starts
+        var selFirstText = selParas.items.length > 0 ? selParas.items[0].text : '';
+        var startIdx     = 0;
+
+        for (var i = 0; i < allParas.items.length; i++) {
+          if (allParas.items[i].text === selFirstText) {
+            startIdx = i;
+            break;
+          }
+        }
+
+        // Reconstruct numbered text from cursor position onward
+        var fromHere  = allParas.items.slice(startIdx);
+        // Reset list counters so claim numbering starts fresh from cursor
+        var listCounters = [0, 0, 0, 0];
+        var claimsText = fromHere.map(function (p) {
+          var li = p.listItemOrNullObject;
+          if (li && !li.isNullObject) {
+            var level = (typeof li.level === 'number') ? li.level : 0;
+            for (var k = level + 1; k < listCounters.length; k++) listCounters[k] = 0;
+            listCounters[level]++;
+            if (level === 0) return listCounters[0] + '. ' + p.text;
+            return '  ' + p.text;
+          }
+          return p.text;
+        }).join('\n');
+
+        // analyzeFromText skips heading detection — treats input as already claims
+        var result = ClaimEngine.analyzeFromText(claimsText, jurisdiction);
+        renderResult(result);
+      });
+    }).catch(function (err) {
+      setStatus('Error: ' + (err.message || err), true);
+    }).finally(restoreUI);
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -221,6 +317,9 @@
 
     setupToggles();
     el('scanBtn').addEventListener('click', scanClaims);
+
+    var curBtn = el('cursorBtn');
+    if (curBtn) curBtn.addEventListener('click', scanFromCursor);
   });
 
 })();

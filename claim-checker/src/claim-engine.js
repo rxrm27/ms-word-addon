@@ -44,15 +44,28 @@ var ClaimEngine = (function () {
   // ── Section extraction ──────────────────────────────────────────────────────
 
   function extractClaimsSection(text) {
-    // Prefer an explicit "Claims" heading on its own line (case-insensitive)
-    var m = text.match(/(?:^|\r?\n)\s*Claims?\s*(?:\r?\n|$)/i);
+    // Heading variants (case-insensitive):
+    //   "Claims" / "Claim" / "I Claim" / "We Claim" / "I/We Claim"
+    //   "What is claimed is" / "What I/We claim is"
+    var HEADING_RE = /(?:^|\r?\n)\s*(?:i\/we\s+claim|we\s+claim|i\s+claim|what\s+(?:is\s+claimed|(?:i|we)\s+claim(?:ed)?)\s+is|claims?)\s*[:\r\n]/i;
+    var m = text.match(HEADING_RE);
     if (m) return text.substring(m.index + m[0].length);
 
-    // Fallback: find "1." at the start of a line followed by a capital letter
+    // Fallback: any line starting "1." or "1)" before a capital letter
     var m2 = text.match(/(?:^|\r?\n)\s*1[.)]\s+[A-Z]/);
     if (m2) return text.substring(m2.index);
 
     return null;
+  }
+
+  // Called by taskpane.js to skip heading detection entirely (cursor mode)
+  function parseClaimsDirectly(text, jurisdiction) {
+    jurisdiction = jurisdiction || 'US';
+    var claims   = parseClaims(text);
+    if (claims.length === 0) return { error: 'no_claims_found', claims: [], metrics: null, findings: null };
+    var metrics  = computeMetrics(claims);
+    var findings = applyAllRules(claims, jurisdiction);
+    return { error: null, claims: claims, metrics: metrics, findings: findings };
   }
 
   // ── Claim parsing ───────────────────────────────────────────────────────────
@@ -771,6 +784,9 @@ var ClaimEngine = (function () {
 
       return { error: null, claims: claims, metrics: metrics, findings: findings };
     },
+
+    // Called from cursor mode — skips heading detection, treats text as already the claims section
+    analyzeFromText: parseClaimsDirectly,
 
     // Exposed for unit tests
     _extractClaimsSection: extractClaimsSection,
