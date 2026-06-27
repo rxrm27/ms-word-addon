@@ -5,12 +5,13 @@
   var STORAGE_KEY = 'claimchecker_v1';
 
   var CATEGORIES = [
-    { key: 'format',         label: 'FORMAT' },
-    { key: 'grammar',        label: 'GRAMMAR' },
-    { key: 'scope',          label: 'SCOPE' },
-    { key: 'dependency',     label: 'DEPENDENCY' },
-    { key: 'elements',       label: 'ELEMENTS' },
-    { key: 'specialFormats', label: 'SPECIAL FORMATS' }
+    { key: 'antecedentBasis', label: 'ANTECEDENT BASIS' },
+    { key: 'format',          label: 'FORMAT' },
+    { key: 'grammar',         label: 'GRAMMAR' },
+    { key: 'scope',           label: 'SCOPE' },
+    { key: 'dependency',      label: 'DEPENDENCY' },
+    { key: 'elements',        label: 'ELEMENTS' },
+    { key: 'specialFormats',  label: 'SPECIAL FORMATS' }
   ];
 
   var TYPE_LABELS = {
@@ -22,6 +23,8 @@
     use:         'Use',
     other:       'Other'
   };
+
+  var _lastScanFn = null;  // remembers which scan function was last used for re-scan
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -41,10 +44,17 @@
   function el(id) { return document.getElementById(id); }
 
   function setStatus(msg, isError) {
-    var bar = el('statusBar');
-    bar.textContent = msg;
-    bar.className   = 'status-bar' + (isError ? ' error' : '');
+    var bar      = el('statusBar');
+    var rescanEl = el('rescanBtn');
+    // preserve the re-scan button node if it exists inside the bar
+    bar.childNodes.forEach(function (n) { if (n !== rescanEl) bar.removeChild(n); });
+    var txt = document.createTextNode(msg);
+    bar.insertBefore(txt, rescanEl);
+    bar.className = 'status-bar' + (isError ? ' error' : '');
     bar.classList.remove('hidden');
+    if (rescanEl) {
+      rescanEl.classList.toggle('hidden', !!isError);
+    }
   }
 
   // ── Collapsible sections ───────────────────────────────────────────────────
@@ -258,6 +268,7 @@
   // ── Auto scan (full document) ──────────────────────────────────────────────
 
   function scanClaims() {
+    _lastScanFn = scanClaims;
     var jurisdiction = el('jurisdictionSelect').value;
     saveState(jurisdiction);
     resetUI('Scanning…');
@@ -279,6 +290,7 @@
   // ── Cursor scan (from insertion point to end) ──────────────────────────────
 
   function scanFromCursor() {
+    _lastScanFn = scanFromCursor;
     var jurisdiction = el('jurisdictionSelect').value;
     saveState(jurisdiction);
     resetUI('Scanning from cursor…');
@@ -344,6 +356,11 @@
 
     var curBtn = el('cursorBtn');
     if (curBtn) curBtn.addEventListener('click', scanFromCursor);
+
+    var rescanBtn = el('rescanBtn');
+    if (rescanBtn) rescanBtn.addEventListener('click', function () {
+      if (_lastScanFn) _lastScanFn();
+    });
   });
 
 })();

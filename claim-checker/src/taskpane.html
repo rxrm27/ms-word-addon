@@ -31,7 +31,9 @@
     Place your cursor on the first claim line, then click <strong>Analyze from Cursor</strong>.
   </div>
 
-  <div id="statusBar" class="status-bar hidden"></div>
+  <div id="statusBar" class="status-bar hidden">
+    <button id="rescanBtn" class="btn-rescan hidden">&#8635; Re-scan</button>
+  </div>
 
   <div id="metricsSection" class="metrics-section hidden">
     <div class="section-label">CLAIMS OVERVIEW</div>
@@ -55,6 +57,15 @@
   </div>
 
   <div id="findingsArea" class="findings-area hidden">
+    <div class="cat-section" id="cat-antecedentBasis">
+      <div class="cat-header" data-cat="antecedentBasis">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">ANTECEDENT BASIS</span>
+        <span class="cat-badge" id="badge-antecedentBasis"></span>
+      </div>
+      <div class="cat-body" id="body-antecedentBasis"></div>
+    </div>
+
     <div class="cat-section" id="cat-format">
       <div class="cat-header" data-cat="format">
         <span class="cat-chevron">&#9660;</span>

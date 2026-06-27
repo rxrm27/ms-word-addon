@@ -138,6 +138,16 @@ var ClaimEngine = (function () {
     var endM = text.match(/(?:^|\r?\n)\s*(?:ABSTRACT|DRAWINGS?|BRIEF\s+DESCRIPTION|DETAILED\s+DESCRIPTION|BACKGROUND|FIELD\s+OF(?:\s+THE)?\s+INVENTION|SUMMARY\s+OF(?:\s+THE)?\s+INVENTION|DESCRIPTION\s+OF(?:\s+(?:THE\s+)?(?:PREFERRED\s+)?EMBODIMENTS?)?)\s*(?:\r?\n|$)/im);
     if (endM) text = text.substring(0, endM.index);
 
+    // Normalize claim-number artifacts from Word/PDF extraction:
+    // "6 . Text"  → "6. Text"  (space between digit and period)
+    // "1 0. Text" → "10. Text" (space inside two-digit number)
+    text = text.replace(/(^|\n)(\s*)(\d+)\s+([.)]\s)/gm, function (m, nl, lead, num, sep) {
+      return nl + lead + num + sep;
+    });
+    text = text.replace(/(^|\n)(\s*)(\d)\s(\d+)([.)]\s)/gm, function (m, nl, lead, d1, d2, sep) {
+      return nl + lead + d1 + d2 + sep;
+    });
+
     var claims = [];
     // Match numbered claims: "N." or "N)" at line start, then text until next claim or end
     var re = /(?:^|\r?\n)\s*(\d+)[.)]\s+([\s\S]+?)(?=\r?\n\s*\d+[.)]\s|\s*$)/g;
@@ -696,9 +706,16 @@ var ClaimEngine = (function () {
 
   function checkE01(c) {
     if (c.claimType !== 'method' || c.isDependent || !c.body) return null;
-    // Common verbs that should appear as gerunds in method steps
-    var infinitiveSteps = c.body.match(/\bto\s+(receive|send|transmit|process|calculate|determine|generate|store|retrieve|compare|detect|identify|select|output|input|perform|execute|analyze|compute|measure|apply|convert|display|update|configure|allocate|schedule|authenticate|validate|encode|decode)\b/gi);
-    if (infinitiveSteps) {
+    // Only flag infinitive form at the START of a body segment (after ';' or line break).
+    // "to determine" mid-sentence is a purpose clause, not a method step.
+    // Only flag when a body segment STARTS with "to + verb" — purpose clauses like
+    // "...to determine X" mid-sentence are valid and should not be flagged.
+    var INFINITIVE_AT_START = /^to\s+(receive|send|transmit|process|calculate|determine|generate|store|retrieve|compare|detect|identify|select|output|input|perform|execute|analyze|compute|measure|apply|convert|display|update|configure|allocate|schedule|authenticate|validate|encode|decode)\b/i;
+    var segments = c.body.split(/[;\n]/);
+    var badSeg = segments.some(function (seg) {
+      return INFINITIVE_AT_START.test(seg.trim().replace(/^[\s\-–•]+/, ''));
+    });
+    if (badSeg) {
       return f('E-01', 'warning', c.number,
         'Method step uses infinitive form ("to receive") — prefer gerund form ("receiving")');
     }
@@ -799,12 +816,13 @@ var ClaimEngine = (function () {
 
   function applyAllRules(claims, jurisdiction) {
     var out = {
-      format:        [],
-      grammar:       [],
-      scope:         [],
-      dependency:    [],
-      elements:      [],
-      specialFormats:[]
+      format:          [],
+      antecedentBasis: [],
+      grammar:         [],
+      scope:           [],
+      dependency:      [],
+      elements:        [],
+      specialFormats:  []
     };
 
     // Set-level format checks
@@ -830,8 +848,8 @@ var ClaimEngine = (function () {
       fi = checkF06(c); if (fi) out.format.push(fi);
       fi = checkF07(c); if (fi) out.format.push(fi);
 
-      // GRAMMAR — antecedent basis must run before anything that uses _introduced
-      out.grammar = out.grammar.concat(checkAntecedentBasis(c, claims));
+      // ANTECEDENT BASIS — must run before other grammar checks (populates c._introduced)
+      out.antecedentBasis = out.antecedentBasis.concat(checkAntecedentBasis(c, claims));
       fi = checkG03(c); if (fi) out.grammar.push(fi);
       fi = checkG04(c); if (fi) out.grammar.push(fi);
       fi = checkG05(c); if (fi) out.grammar.push(fi);
