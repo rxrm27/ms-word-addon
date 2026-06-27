@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Claim Engine — Unit Tests</title>
+  <style>
+    body { font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; padding: 16px; background: #f5f5f5; }
+    h1   { font-size: 18px; margin-bottom: 12px; }
+    h2   { font-size: 13px; font-weight: 700; margin: 14px 0 4px; color: #444; }
+    .suite  { background: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 12px; margin-bottom: 12px; }
+    .pass   { color: #27ae60; font-weight: 600; }
+    .fail   { color: #c0392b; font-weight: 600; }
+    .result { padding: 3px 0; font-size: 12px; }
+    .summary { margin-top: 16px; font-size: 14px; font-weight: 700; }
+    pre { background:#f0f0f0; padding:6px 8px; border-radius:4px; font-size:11px; margin-top:4px; white-space:pre-wrap; word-break:break-all; }
+  </style>
+</head>
+<body>
+  <h1>Claim Engine Unit Tests</h1>
+  <div id="output"></div>
+  <script src="../src/claim-engine.js"></script>
+  <script>
+  (function () {
+
+    var passed = 0, failed = 0;
+    var out    = document.getElementById('output');
+
+    function suite(name, fn) {
+      var div = document.createElement('div');
+      div.className = 'suite';
+      div.innerHTML = '<h2>' + name + '</h2>';
+      out.appendChild(div);
+      fn(function assert(label, ok, detail) {
+        var d   = document.createElement('div');
+        d.className = 'result';
+        if (ok) {
+          d.innerHTML = '<span class="pass">✓</span> ' + label;
+          passed++;
+        } else {
+          d.innerHTML = '<span class="fail">✗</span> ' + label;
+          if (detail !== undefined) {
+            var pre = document.createElement('pre');
+            pre.textContent = typeof detail === 'object' ? JSON.stringify(detail, null, 2) : String(detail);
+            d.appendChild(pre);
+          }
+          failed++;
+        }
+        div.appendChild(d);
+      });
+    }
+
+    function hasRule(findings, catKey, ruleCode) {
+      var cat = findings[catKey] || [];
+      return cat.some(function (f) { return f.ruleCode === ruleCode; });
+    }
+
+    // ── Sample claim texts ────────────────────────────────────────────────────
+
+    var SIMPLE_CLAIMS = [
+      'Claims',
+      '',
+      '1. An apparatus for processing data, comprising:',
+      '  a processor configured to receive input data; and',
+      '  a memory coupled to the processor, the memory storing instructions.',
+      '',
+      '2. The apparatus of claim 1, wherein the processor further comprises a cache unit.',
+      ''
+    ].join('\n');
+
+    var METHOD_CLAIMS = [
+      'Claims',
+      '',
+      '1. A method for transmitting data, comprising:',
+      '  receiving, at a server, a request from a client; and',
+      '  transmitting a response to the client.',
+      '',
+      '2. The method of claim 1, wherein the response includes an authentication token.',
+      ''
+    ].join('\n');
+
+    var BAD_ANTECEDENT = [
+      'Claims',
+      '',
+      '1. An apparatus, comprising:',
+      '  the processor configured to receive input.',
+      ''
+    ].join('\n');
+
+    var NO_TRANSITION = [
+      'Claims',
+      '',
+      '1. An apparatus for processing data, the processor configured to receive input.',
+      ''
+    ].join('\n');
+
+    var MULTI_SENTENCE = [
+      'Claims',
+      '',
+      '1. An apparatus for processing data. The processor is configured to receive input.',
+      ''
+    ].join('\n');
+
+    var CONSISTING_OF = [
+      'Claims',
+      '',
+      '1. A composition consisting of:',
+      '  iron at 60%;',
+      '  carbon at 25%; and',
+      '  manganese at 10%.',
+      ''
+    ].join('\n');
+
+    var MARKUSH_ERROR = [
+      'Claims',
+      '',
+      '1. A compound, comprising:',
+      '  a solvent selected from the group comprising water, ethanol and methanol.',
+      ''
+    ].join('\n');
+
+    var FORWARD_REF = [
+      'Claims',
+      '',
+      '1. The apparatus of claim 2, comprising a processor.',
+      '',
+      '2. An apparatus, comprising a memory.',
+      ''
+    ].join('\n');
+
+    var MULTI_DEP_US = [
+      'Claims',
+      '',
+      '1. An apparatus, comprising a processor.',
+      '',
+      '2. The apparatus of any one of claims 1, comprising a cache.',
+      '',
+      '3. The apparatus of any one of claims 1 or 2, comprising a memory.',
+      ''
+    ].join('\n');
+
+    var JEPSON = [
+      'Claims',
+      '',
+      '1. An apparatus for processing data, characterized in that the processor uses a novel algorithm.',
+      ''
+    ].join('\n');
+
+    var TWO_SAME_NOUN = [
+      'Claims',
+      '',
+      '1. An apparatus, comprising:',
+      '  a processor configured to process data; and',
+      '  a processor configured to output data.',
+      ''
+    ].join('\n');
+
+    // ── Test suites ────────────────────────────────────────────────────────────
+
+    suite('Claim section extraction', function (assert) {
+      var ext = ClaimEngine._extractClaimsSection;
+      assert('Finds "Claims" heading', ext('foo\nClaims\n1. An apparatus') !== null);
+      assert('Returns null when no heading and no numbered claim',
+        ext('Just some prose here.') === null);
+      assert('Fallback: finds numbered claim at line start',
+        ext('Description text\n1. An apparatus') !== null);
+    });
+
+    suite('Claim parsing', function (assert) {
+      var r = ClaimEngine.analyze(SIMPLE_CLAIMS, 'US');
+      assert('No parse error', r.error === null, r.error);
+      assert('Parsed 2 claims', r.claims.length === 2, r.claims.length);
+      assert('Claim 1 is independent', !r.claims[0].isDependent);
+      assert('Claim 2 is dependent', r.claims[1].isDependent);
+      assert('Claim 2 parent = [1]', r.claims[1].parentClaims[0] === 1);
+      assert('Claim 1 type = apparatus', r.claims[0].claimType === 'apparatus', r.claims[0].claimType);
+    });
+
+    suite('Method claim detection', function (assert) {
+      var r = ClaimEngine.analyze(METHOD_CLAIMS, 'US');
+      assert('Claim 1 type = method', r.claims[0].claimType === 'method', r.claims[0].claimType);
+    });
+
+    suite('Metrics computation', function (assert) {
+      var r = ClaimEngine.analyze(SIMPLE_CLAIMS, 'US');
+      assert('Total = 2',       r.metrics.total === 2);
+      assert('Independent = 1', r.metrics.independent === 1);
+      assert('Dependent = 1',   r.metrics.dependent === 1);
+    });
+
+    suite('F-03 — missing transition', function (assert) {
+      var r = ClaimEngine.analyze(NO_TRANSITION, 'US');
+      assert('F-03 fired', hasRule(r.findings, 'format', 'F-03'), r.findings.format);
+    });
+
+    suite('F-01 — multiple sentences', function (assert) {
+      var r = ClaimEngine.analyze(MULTI_SENTENCE, 'US');
+      assert('F-01 fired', hasRule(r.findings, 'format', 'F-01'), r.findings.format);
+    });
+
+    suite('G-01 — antecedent basis (missing intro)', function (assert) {
+      var r = ClaimEngine.analyze(BAD_ANTECEDENT, 'US');
+      assert('G-01 fired', hasRule(r.findings, 'grammar', 'G-01'), r.findings.grammar);
+    });
+
+    suite('G-06 — two same nouns without disambiguation', function (assert) {
+      var r = ClaimEngine.analyze(TWO_SAME_NOUN, 'US');
+      assert('G-06 fired', hasRule(r.findings, 'grammar', 'G-06'), r.findings.grammar);
+    });
+
+    suite('S-02 — "consisting of" strategic risk', function (assert) {
+      var r = ClaimEngine.analyze(CONSISTING_OF, 'US');
+      assert('S-02 fired', hasRule(r.findings, 'scope', 'S-02'), r.findings.scope);
+    });
+
+    suite('S-03 — percentage sum in closed claim', function (assert) {
+      var r = ClaimEngine.analyze(CONSISTING_OF, 'US');
+      assert('S-03 fired (sum=95)', hasRule(r.findings, 'scope', 'S-03'), r.findings.scope);
+    });
+
+    suite('D-02 — forward reference', function (assert) {
+      var r = ClaimEngine.analyze(FORWARD_REF, 'US');
+      assert('D-02 fired', hasRule(r.findings, 'dependency', 'D-02'), r.findings.dependency);
+    });
+
+    suite('SF-01 — two-part (Jepson) claim', function (assert) {
+      var r = ClaimEngine.analyze(JEPSON, 'US');
+      assert('SF-01 fired', hasRule(r.findings, 'specialFormats', 'SF-01'), r.findings.specialFormats);
+    });
+
+    suite('SF-02 — Markush "comprising" error', function (assert) {
+      var r = ClaimEngine.analyze(MARKUSH_ERROR, 'US');
+      assert('SF-02 fired', hasRule(r.findings, 'specialFormats', 'SF-02'), r.findings.specialFormats);
+    });
+
+    suite('D-05 — multiple-multiple dep (US mode)', function (assert) {
+      var r = ClaimEngine.analyze(MULTI_DEP_US, 'US');
+      assert('D-05 fired in US mode', hasRule(r.findings, 'dependency', 'D-05'), r.findings.dependency);
+      var r2 = ClaimEngine.analyze(MULTI_DEP_US, 'EPO');
+      assert('D-05 NOT fired in EPO mode', !hasRule(r2.findings, 'dependency', 'D-05'));
+    });
+
+    suite('Clean claim set — no false positives', function (assert) {
+      var r = ClaimEngine.analyze(SIMPLE_CLAIMS, 'US');
+      assert('No G-01 on clean claims', !hasRule(r.findings, 'grammar', 'G-01'), r.findings.grammar);
+      assert('No D-02 on clean claims', !hasRule(r.findings, 'dependency', 'D-02'));
+      assert('No F-03 on clean claims', !hasRule(r.findings, 'format', 'F-03'));
+    });
+
+    suite('No claims section', function (assert) {
+      var r = ClaimEngine.analyze('Just a description with no claims here.', 'US');
+      assert('Returns error=no_claims_section', r.error === 'no_claims_section', r.error);
+    });
+
+    // ── Summary ────────────────────────────────────────────────────────────────
+
+    var summary     = document.createElement('div');
+    summary.className = 'summary';
+    var total       = passed + failed;
+    summary.innerHTML = failed === 0
+      ? '<span class="pass">All ' + total + ' tests passed ✓</span>'
+      : '<span class="fail">' + failed + ' of ' + total + ' tests FAILED</span>';
+    out.appendChild(summary);
+
+  })();
+  </script>
+</body>
+</html>

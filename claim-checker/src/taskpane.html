@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Patent Claim Checker</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css"/>
+</head>
+<body>
+  <div class="header">
+    <span class="header-icon">&#9878;</span>
+    <span class="header-title">Patent Claim Checker</span>
+  </div>
+
+  <div class="controls">
+    <div class="control-row">
+      <label for="jurisdictionSelect" class="control-label">Jurisdiction</label>
+      <select id="jurisdictionSelect" class="jurisdiction-select">
+        <option value="US">US (USPTO)</option>
+        <option value="EPO">EPO (Europe)</option>
+        <option value="PCT">PCT (International)</option>
+        <option value="Generic">Generic</option>
+      </select>
+    </div>
+    <button id="scanBtn" class="btn-primary">Scan Claims</button>
+  </div>
+
+  <div id="statusBar" class="status-bar hidden"></div>
+
+  <div id="metricsSection" class="metrics-section hidden">
+    <div class="section-label">CLAIMS OVERVIEW</div>
+    <div class="metric-grid">
+      <div class="metric-cell">
+        <span class="metric-val" id="mIndependent">—</span>
+        <span class="metric-lbl">Independent</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val" id="mDependent">—</span>
+        <span class="metric-lbl">Dependent</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-val" id="mTotal">—</span>
+        <span class="metric-lbl">Total</span>
+      </div>
+    </div>
+    <div class="type-chips" id="typeChips"></div>
+  </div>
+
+  <div id="findingsArea" class="findings-area hidden">
+    <div class="cat-section" id="cat-format">
+      <div class="cat-header" data-cat="format">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">FORMAT</span>
+        <span class="cat-badge" id="badge-format"></span>
+      </div>
+      <div class="cat-body" id="body-format"></div>
+    </div>
+
+    <div class="cat-section" id="cat-grammar">
+      <div class="cat-header" data-cat="grammar">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">GRAMMAR</span>
+        <span class="cat-badge" id="badge-grammar"></span>
+      </div>
+      <div class="cat-body" id="body-grammar"></div>
+    </div>
+
+    <div class="cat-section" id="cat-scope">
+      <div class="cat-header" data-cat="scope">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">SCOPE</span>
+        <span class="cat-badge" id="badge-scope"></span>
+      </div>
+      <div class="cat-body" id="body-scope"></div>
+    </div>
+
+    <div class="cat-section" id="cat-dependency">
+      <div class="cat-header" data-cat="dependency">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">DEPENDENCY</span>
+        <span class="cat-badge" id="badge-dependency"></span>
+      </div>
+      <div class="cat-body" id="body-dependency"></div>
+    </div>
+
+    <div class="cat-section" id="cat-elements">
+      <div class="cat-header" data-cat="elements">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">ELEMENTS</span>
+        <span class="cat-badge" id="badge-elements"></span>
+      </div>
+      <div class="cat-body" id="body-elements"></div>
+    </div>
+
+    <div class="cat-section" id="cat-specialFormats">
+      <div class="cat-header" data-cat="specialFormats">
+        <span class="cat-chevron">&#9660;</span>
+        <span class="cat-title">SPECIAL FORMATS</span>
+        <span class="cat-badge" id="badge-specialFormats"></span>
+      </div>
+      <div class="cat-body" id="body-specialFormats"></div>
+    </div>
+  </div>
+
+  <script src="claim-engine.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>

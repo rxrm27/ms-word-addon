@@ -10,8 +10,8 @@
   <Version>1.0.0.0</Version>
   <ProviderName>Patent Tools</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Patent Reference Checker"/>
-  <Description DefaultValue="Detect reference number conflicts in patent specifications and generate a reference table."/>
+  <DisplayName DefaultValue="Patent Tools"/>
+  <Description DefaultValue="Patent Reference Checker and Claim Checker for Word — detect reference conflicts and validate claim sets."/>
   <IconUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-80.png"/>
   <SupportUrl DefaultValue="https://rxrm27.github.io/ms-word-addon/"/>
@@ -67,6 +67,22 @@
                     <SourceLocation resid="Taskpane.Url"/>
                   </Action>
                 </Control>
+                <Control xsi:type="Button" id="ShowClaimCheckerBtn">
+                  <Label resid="ClaimBtn.Label"/>
+                  <Supertip>
+                    <Title resid="ClaimBtn.Label"/>
+                    <Description resid="ClaimBtn.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.32"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>ClaimCheckerPane</TaskpaneId>
+                    <SourceLocation resid="ClaimTaskpane.Url"/>
+                  </Action>
+                </Control>
               </Group>
             </CustomTab>
           </ExtensionPoint>
@@ -80,16 +96,19 @@
         <bt:Image id="Icon.80" DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url"  DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/taskpane.html"/>
+        <bt:Url id="Commands.Url"       DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/commands.html"/>
+        <bt:Url id="Taskpane.Url"       DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/taskpane.html"/>
+        <bt:Url id="ClaimTaskpane.Url"  DefaultValue="https://rxrm27.github.io/ms-word-addon/claim-checker/src/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="Tab.Label"     DefaultValue="PatSync"/>
-        <bt:String id="Group.Label"   DefaultValue="Patent Tools"/>
-        <bt:String id="Btn.Label"     DefaultValue="Check Ref. Num"/>
+        <bt:String id="Tab.Label"        DefaultValue="PatSync"/>
+        <bt:String id="Group.Label"      DefaultValue="Patent Tools"/>
+        <bt:String id="Btn.Label"        DefaultValue="Check Ref. Num"/>
+        <bt:String id="ClaimBtn.Label"   DefaultValue="Check Claims"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="Btn.Tooltip" DefaultValue="Open the patent reference number checker"/>
+        <bt:String id="Btn.Tooltip"      DefaultValue="Open the patent reference number checker"/>
+        <bt:String id="ClaimBtn.Tooltip" DefaultValue="Open the patent claim checker — validates claim format, grammar, scope and dependency rules"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>
