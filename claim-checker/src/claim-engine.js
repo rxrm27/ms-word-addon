@@ -31,7 +31,9 @@ var ClaimEngine = (function () {
     'disclosure', 'description', 'specification', 'embodiment', 'embodiments',
     'example', 'examples', 'above', 'below', 'foregoing', 'scope', 'spirit',
     'purpose', 'basis', 'case', 'manner', 'way', 'same', 'fact', 'time',
-    'group', 'formula', 'range', 'form', 'ratio', 'rate', 'amount', 'order'
+    'group', 'formula', 'range', 'form', 'ratio', 'rate', 'amount', 'order',
+    // Quantifier words — "the one or more X", "the at least one X", "the plurality of X"
+    'one', 'least', 'more', 'plurality', 'number', 'set'
   ]);
 
   // Adjectives that modify claim nouns but are not the head noun
@@ -40,6 +42,66 @@ var ClaimEngine = (function () {
     'another', 'other', 'said', 'predetermined', 'given', 'respective',
     'associated', 'corresponding', 'aforementioned', 'aforesaid'
   ]);
+
+  // Words that terminate a noun phrase — used in negative lookahead in NP regexes
+  var _NP_STOP = [
+    // Prepositions
+    'to','in','of','for','with','from','on','at','by','as','via','into','upon',
+    'within','without','during','after','before','across','above','below',
+    'between','among','over','under','around','per','plus','about',
+    'according','toward','towards','against','despite','except','besides',
+    // Conjunctions / relative
+    'or','and','but','nor','that','which','when','where','while','if','unless',
+    'until','since','though','although','because','whether',
+    // Auxiliaries / copulae
+    'is','are','was','were','has','have','had','do','does','did',
+    'will','would','can','could','may','might','must','shall','should',
+    'be','been','being',
+    // Determiners / pronouns
+    'not','no','its','their','this','these','those','such','each','any',
+    'both','some','what','whose',
+    // Claim verbs — 3rd-person singular (-s) AND base forms
+    'comprises','comprise','includes','include','contains','contain',
+    'receives','receive','provides','provide','stores','store',
+    'generates','generate','performs','perform','enables','enable',
+    'determines','determine','activates','activate','computes','compute',
+    'calculates','calculate','transmits','transmit','processes','process',
+    'communicates','communicate','outputs','output','reads','read',
+    'writes','write','retrieves','retrieve','identifies','identify',
+    'detects','detect','monitors','monitor','controls','control',
+    'manages','manage','maintains','maintain','updates','update',
+    'creates','create','displays','display','uses','use',
+    'produces','produce','sends','send','operates','operate',
+    'executes','execute','functions','function','runs','run',
+    'applies','apply','converts','convert','measures','measure',
+    'evaluates','evaluate','supplies','supply','gives','give',
+    'makes','make','takes','take','sets','set','works','work',
+    'analyzes','analyze','classifies','classify','initiates','initiate',
+    'selects','select','assigns','assign','allocates','allocate','couples','couple',
+    // Claim verbs — gerund / present-participle forms (-ing)
+    'comprising','including','containing','consisting','characterized',
+    'receiving','providing','storing','generating','performing','enabling',
+    'determining','activating','computing','calculating','transmitting',
+    'processing','communicating','outputting','reading','writing','retrieving',
+    'identifying','detecting','monitoring','controlling','managing','maintaining',
+    'updating','creating','displaying','using','producing','sending','operating',
+    'executing','applying','converting','measuring','evaluating','supplying',
+    'classifying','initiating','selecting','assigning','allocating','coupling',
+    // Patent connectives
+    'wherein','whereby','thereby','therefore','thus','hence','whereas','such',
+    'based','using','used','having','formed','adapted','configured',
+    'coupled','connected','attached','mounted','disposed','corresponding',
+    'responsive','selected','designated','associated','related','derived',
+    'obtained','established','defined','described','disclosed','claimed'
+  ].join('|');
+
+  // Noun phrase optional-extra: additional word that is NOT a stop word
+  var _NP_EXTRA = '(?:\\s+(?!(?:' + _NP_STOP + ')\\b)[a-z][a-z\\-]+){0,2}';
+
+  // Regex sources for antecedent-basis checks (recreated per call to reset lastIndex)
+  var _INTRO_SRC    = '\\b(?:a|an)\\s+(?:(?:first|second|third|fourth|further|additional)\\s+)?(?:plurality\\s+of\\s+)?([a-z][a-z\\-]+' + _NP_EXTRA + ')';
+  var _ALT_INTRO_SRC = '\\b(?:one\\s+or\\s+more|at\\s+least\\s+one)\\s+([a-z][a-z\\-]+' + _NP_EXTRA + ')';
+  var _BACK_SRC     = '\\b(?:the|said)\\s+(?:(?:first|second|third|fourth|further|additional)\\s+)?([a-z][a-z\\-]+' + _NP_EXTRA + ')';
 
   // ── Section extraction ──────────────────────────────────────────────────────
 
@@ -71,6 +133,10 @@ var ClaimEngine = (function () {
   // ── Claim parsing ───────────────────────────────────────────────────────────
 
   function parseClaims(text) {
+    // Truncate at post-claims sections that may bleed in (ABSTRACT, DRAWINGS, DESCRIPTION…)
+    var endM = text.match(/(?:^|\r?\n)\s*(?:ABSTRACT|DRAWINGS?|BRIEF\s+DESCRIPTION|DETAILED\s+DESCRIPTION|BACKGROUND|FIELD\s+OF(?:\s+THE)?\s+INVENTION|SUMMARY\s+OF(?:\s+THE)?\s+INVENTION|DESCRIPTION\s+OF(?:\s+(?:THE\s+)?(?:PREFERRED\s+)?EMBODIMENTS?)?)\s*(?:\r?\n|$)/im);
+    if (endM) text = text.substring(0, endM.index);
+
     var claims = [];
     // Match numbered claims: "N." or "N)" at line start, then text until next claim or end
     var re = /(?:^|\r?\n)\s*(\d+)[.)]\s+([\s\S]+?)(?=\r?\n\s*\d+[.)]\s|\s*$)/g;
@@ -217,6 +283,8 @@ var ClaimEngine = (function () {
   }
 
   function checkF03(c) {
+    // Dependent claims use "wherein" to add limitations — no formal transition required
+    if (c.isDependent) return null;
     if (!c.transition) {
       return f('F-03', 'error', c.number,
         'No transitional phrase found (comprising / including / consisting of / etc.)');
@@ -287,11 +355,13 @@ var ClaimEngine = (function () {
     return w;
   }
 
+  var _STOP_WORDS_SET = new Set(_NP_STOP.split('|'));
+
   function getHeadNoun(phrase) {
-    // Last meaningful word in a noun phrase
     var words = phrase.toLowerCase().trim().split(/\s+/);
     for (var i = words.length - 1; i >= 0; i--) {
-      if (!ORDINAL_WORDS.has(words[i]) && words[i].length > 1) return words[i];
+      var w = words[i];
+      if (!ORDINAL_WORDS.has(w) && !_STOP_WORDS_SET.has(w) && w.length > 1) return w;
     }
     return words[words.length - 1];
   }
@@ -310,15 +380,23 @@ var ClaimEngine = (function () {
       if (parent && parent._introduced) parent._introduced.forEach(function (n) { introduced.add(n); });
     }
 
-    // Collect introductions: "a X" / "an X" (optionally preceded by ordinal/number)
-    var introRe = /\b(?:a|an)\s+(?:(?:first|second|third|fourth|further|additional)\s+)?(?:plurality\s+of\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){0,3})/gi;
+    // Collect introductions — rebuild regexes each call to reset lastIndex
+    var introRe   = new RegExp(_INTRO_SRC,     'gi');
+    var altIntroRe = new RegExp(_ALT_INTRO_SRC, 'gi');
     var m;
-    while ((m = introRe.exec(text)) !== null) {
-      var phrase = m[1].toLowerCase().trim();
+
+    function addPhrase(raw) {
+      var phrase = raw.toLowerCase().trim();
       introduced.add(phrase);
       introduced.add(getHeadNoun(phrase));
       introduced.add(singularize(getHeadNoun(phrase)));
     }
+
+    // "a/an X" introductions
+    while ((m = introRe.exec(text)) !== null)   addPhrase(m[1]);
+    // "one or more X" / "at least one X" introductions
+    while ((m = altIntroRe.exec(text)) !== null) addPhrase(m[1]);
+
     c._introduced = new Set(introduced);
 
     function isIntroduced(phrase) {
@@ -327,7 +405,6 @@ var ClaimEngine = (function () {
       var sing = singularize(head);
       if (KNOWN_THE_WORDS.has(head) || KNOWN_THE_WORDS.has(lp)) return true;
       if (introduced.has(lp) || introduced.has(head) || introduced.has(sing)) return true;
-      // Partial match: head noun found inside any introduced multi-word phrase
       for (var n of introduced) {
         var nHead = getHeadNoun(n);
         if (nHead === head || nHead === sing) return true;
@@ -337,7 +414,7 @@ var ClaimEngine = (function () {
 
     // Check back-references: "the X" / "said X"
     var flagged = new Set();
-    var backRe = /\b(?:the|said)\s+(?:(?:first|second|third|fourth|further|additional)\s+)?([a-z][a-z\-]+(?:\s+[a-z][a-z\-]+){0,3})/gi;
+    var backRe  = new RegExp(_BACK_SRC, 'gi');
     while ((m = backRe.exec(text)) !== null) {
       var noun = m[1].toLowerCase().trim();
       if (flagged.has(noun)) continue;
@@ -383,12 +460,13 @@ var ClaimEngine = (function () {
 
   function checkG06(c) {
     // Same noun introduced more than once with "a" without first/second disambiguation
+    // Uses head noun as key so "a conversation" + "a conversation type" don't collide
     var text   = c.rawText.toLowerCase();
     var counts = {};
-    var re     = /\ba\s+([a-z][a-z\-]+)\b/g;
+    var re     = new RegExp(_INTRO_SRC, 'gi');
     var m;
     while ((m = re.exec(text)) !== null) {
-      var noun    = m[1];
+      var noun    = getHeadNoun(m[1]);  // head noun as dedup key
       var context = text.substring(Math.max(0, m.index - 25), m.index);
       if (/\b(first|second|third|fourth|another|further)\b/.test(context)) continue;
       counts[noun] = (counts[noun] || 0) + 1;
