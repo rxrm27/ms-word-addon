@@ -180,6 +180,14 @@ body {
   color: var(--clr-muted);
   margin-top: 2px;
 }
+.metric-nums {
+  display: block;
+  font-size: 9px;
+  color: var(--clr-primary);
+  margin-top: 3px;
+  line-height: 1.4;
+  word-break: break-all;
+}
 
 .type-chips {
   display: flex;
@@ -197,6 +205,7 @@ body {
   color: #fff;
 }
 .type-chip.method      { background: var(--clr-type-method); }
+.type-chip.system      { background: #1565c0; }
 .type-chip.apparatus   { background: var(--clr-type-apparatus); }
 .type-chip.crm         { background: var(--clr-type-crm); }
 .type-chip.composition { background: var(--clr-type-composition); }

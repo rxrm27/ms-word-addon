@@ -15,6 +15,7 @@
 
   var TYPE_LABELS = {
     method:      'Method',
+    system:      'System',
     apparatus:   'Apparatus',
     crm:         'CRM',
     composition: 'Composition',
@@ -137,10 +138,33 @@
 
   // ── Metrics ────────────────────────────────────────────────────────────────
 
+  function formatClaimNums(nums) {
+    if (!nums || nums.length === 0) return '';
+    // Compact into ranges: [1,2,3,5,6] → "1–3, 5–6"
+    var sorted = nums.slice().sort(function (a, b) { return a - b; });
+    var ranges = [];
+    var start = sorted[0], end = sorted[0];
+    for (var i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        ranges.push(start === end ? String(start) : start + '–' + end);
+        start = end = sorted[i];
+      }
+    }
+    ranges.push(start === end ? String(start) : start + '–' + end);
+    return 'Cl. ' + ranges.join(', ');
+  }
+
   function renderMetrics(metrics) {
     el('mIndependent').textContent = metrics.independent;
     el('mDependent').textContent   = metrics.dependent;
     el('mTotal').textContent       = metrics.total;
+
+    var indNums = el('mIndependentNums');
+    var depNums = el('mDependentNums');
+    if (indNums) indNums.textContent = formatClaimNums(metrics.independentNums);
+    if (depNums) depNums.textContent = formatClaimNums(metrics.dependentNums);
 
     var chips = el('typeChips');
     chips.innerHTML = '';

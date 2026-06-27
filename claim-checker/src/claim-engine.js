@@ -20,7 +20,8 @@ var ClaimEngine = (function () {
   var CATEGORY_PATTERNS = {
     crm:         /non.transitory|computer.readable\s+medium|storage\s+medium|computer\s+program\s+product|medium\s+storing/i,
     method:      /\b(method|process|procedure|technique)\b/i,
-    apparatus:   /\b(apparatus|device|system|machine|assembly|arrangement|unit|circuit|controller|module|sensor|network|platform|interface)\b/i,
+    system:      /\b(system|systems)\b/i,
+    apparatus:   /\b(apparatus|device|machine|assembly|arrangement|unit|circuit|controller|module|sensor|network|platform|interface)\b/i,
     composition: /\b(composition|compound|mixture|formulation|preparation|blend|alloy|polymer)\b/i,
     use:         /\buse\s+of\b/i
   };
@@ -222,10 +223,29 @@ var ClaimEngine = (function () {
   }
 
   function detectClaimType(claim) {
-    var text = claim.preamble || claim.rawText;
-    var keys = ['crm', 'method', 'apparatus', 'composition', 'use'];
+    var preamble = claim.preamble || claim.rawText;
+
+    // CRM always wins (specific term)
+    if (CATEGORY_PATTERNS.crm.test(preamble)) { claim.claimType = 'crm'; return; }
+
+    // For independent claims: try to extract leading noun from "A/An [adj]* NOUN" to get
+    // the most specific label (system, method, apparatus, device…) from the actual language.
+    if (!claim.isDependent) {
+      var m = preamble.match(/^(?:A|An)\s+(?:[a-zA-Z][a-zA-Z0-9\-]*\s+){0,5}([a-zA-Z][a-zA-Z0-9\-]+)/i);
+      if (m) {
+        var noun = m[1].toLowerCase();
+        if (/^(method|process|procedure|technique)$/.test(noun)) { claim.claimType = 'method'; return; }
+        if (/^(composition|compound|mixture|formulation|preparation|blend|alloy|polymer)$/.test(noun)) { claim.claimType = 'composition'; return; }
+        if (/^(use)$/.test(noun) && /\buse\s+of\b/i.test(preamble)) { claim.claimType = 'use'; return; }
+        if (/^(system|systems)$/.test(noun)) { claim.claimType = 'system'; return; }
+        if (/^(apparatus|device|machine|assembly|arrangement|unit|circuit|controller|module|sensor|network|platform|interface)$/.test(noun)) { claim.claimType = 'apparatus'; return; }
+      }
+    }
+
+    // Fallback keyword matching (handles dependent claims and unusual preambles)
+    var keys = ['method', 'system', 'apparatus', 'composition', 'use'];
     for (var i = 0; i < keys.length; i++) {
-      if (CATEGORY_PATTERNS[keys[i]].test(text)) {
+      if (CATEGORY_PATTERNS[keys[i]].test(preamble)) {
         claim.claimType = keys[i];
         return;
       }
@@ -237,14 +257,22 @@ var ClaimEngine = (function () {
 
   function computeMetrics(claims) {
     var m = {
-      total:       claims.length,
-      independent: 0,
-      dependent:   0,
-      byType:      { method: 0, apparatus: 0, crm: 0, composition: 0, use: 0, other: 0 }
+      total:           claims.length,
+      independent:     0,
+      dependent:       0,
+      independentNums: [],
+      dependentNums:   [],
+      byType:          { method: 0, system: 0, apparatus: 0, crm: 0, composition: 0, use: 0, other: 0 }
     };
     claims.forEach(function (c) {
-      if (c.isDependent) m.dependent++; else m.independent++;
-      m.byType[c.claimType]++;
+      if (c.isDependent) {
+        m.dependent++;
+        m.dependentNums.push(c.number);
+      } else {
+        m.independent++;
+        m.independentNums.push(c.number);
+      }
+      m.byType[c.claimType] = (m.byType[c.claimType] || 0) + 1;
     });
     return m;
   }
