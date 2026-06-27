@@ -337,6 +337,23 @@ body {
   flex: 1;
 }
 
+.btn-dismiss {
+  flex-shrink: 0;
+  margin-left: 4px;
+  background: transparent;
+  border: none;
+  color: var(--clr-muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 3px;
+  cursor: pointer;
+  opacity: 0.35;
+  align-self: flex-start;
+}
+.btn-dismiss:hover { opacity: 1; color: var(--clr-error); }
+
+.finding-row.dismissed { display: none; }
+
 .empty-cat {
   padding: 8px 14px;
   font-size: 12px;

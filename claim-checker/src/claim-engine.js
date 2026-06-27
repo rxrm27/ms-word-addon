@@ -134,8 +134,8 @@ var ClaimEngine = (function () {
   // ── Claim parsing ───────────────────────────────────────────────────────────
 
   function parseClaims(text) {
-    // Truncate at post-claims sections that may bleed in (ABSTRACT, DRAWINGS, DESCRIPTION…)
-    var endM = text.match(/(?:^|\r?\n)\s*(?:ABSTRACT|DRAWINGS?|BRIEF\s+DESCRIPTION|DETAILED\s+DESCRIPTION|BACKGROUND|FIELD\s+OF(?:\s+THE)?\s+INVENTION|SUMMARY\s+OF(?:\s+THE)?\s+INVENTION|DESCRIPTION\s+OF(?:\s+(?:THE\s+)?(?:PREFERRED\s+)?EMBODIMENTS?)?)\s*(?:\r?\n|$)/im);
+    // Truncate at post-claims sections that may bleed in
+    var endM = text.match(/(?:^|\r?\n)\s*(?:ABSTRACT|DRAWINGS?|BRIEF\s+DESCRIPTION|DETAILED\s+DESCRIPTION|BACKGROUND|FIELD\s+OF(?:\s+THE)?\s+INVENTION|SUMMARY\s+OF(?:\s+THE)?\s+INVENTION|DESCRIPTION\s+OF(?:\s+(?:THE\s+)?(?:PREFERRED\s+)?EMBODIMENTS?)?|Dated?\s+this\b|Date\s*:\s*\w|Signed?\s+(?:this|by)\b|Signature\s+of\b|Attorney\s+(?:for|of\s+record)\b|IN\s+WITNESS\s+WHEREOF\b)\s*(?:\r?\n|$)/im);
     if (endM) text = text.substring(0, endM.index);
 
     // Normalize claim-number artifacts from Word/PDF extraction:
@@ -210,19 +210,20 @@ var ClaimEngine = (function () {
                || /\bclaims?\s+\d+\s+(?:or|and|through|to)\s+\d+\b/i.test(text);
     if (isMulti) claim.isMultiDep = true;
 
-    // Collect all referenced claim numbers that are lower than this claim
+    // Collect ALL referenced claim numbers — include forward refs and non-existent ones.
+    // D-02 flags forward refs; D-06 flags non-existent refs. No pre-filtering here.
     var parents = [];
     var re = /\bclaims?\s+(\d+)\b/gi;
     var m;
     while ((m = re.exec(text)) !== null) {
       var n = parseInt(m[1], 10);
-      if (n < claim.number && !parents.includes(n)) parents.push(n);
+      if (n !== claim.number && !parents.includes(n)) parents.push(n);
     }
     // Also handle "claim N or M" / "claim N and M"
     var altM = text.match(/\bclaims?\s+(\d+)\s+(?:or|and)\s+(\d+)\b/i);
     if (altM) {
       [parseInt(altM[1], 10), parseInt(altM[2], 10)].forEach(function (n) {
-        if (n < claim.number && !parents.includes(n)) parents.push(n);
+        if (n !== claim.number && !parents.includes(n)) parents.push(n);
       });
     }
 

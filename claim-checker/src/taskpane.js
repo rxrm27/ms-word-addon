@@ -24,7 +24,32 @@
     other:       'Other'
   };
 
-  var _lastScanFn = null;  // remembers which scan function was last used for re-scan
+  var _lastScanFn = null;
+  var DISMISSED_KEY = 'claimchecker_dismissed_v1';
+  var _dismissed = loadDismissed();
+
+  // ── Dismissed findings persistence ────────────────────────────────────────
+
+  function loadDismissed() {
+    try {
+      var raw = localStorage.getItem(DISMISSED_KEY);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) { return new Set(); }
+  }
+
+  function saveDismissed() {
+    try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(Array.from(_dismissed))); } catch (e) {}
+  }
+
+  function djb2(str) {
+    var h = 5381;
+    for (var i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+    return (h >>> 0).toString(36);
+  }
+
+  function findingId(f) {
+    return f.ruleCode + '_' + (f.claimNumber || 0) + '_' + djb2(f.message);
+  }
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -92,7 +117,38 @@
 
   // ── Render findings ────────────────────────────────────────────────────────
 
-  function renderFinding(finding) {
+  function refreshBadge(catKey, body) {
+    var rows    = Array.from(body.querySelectorAll('.finding-row:not(.dismissed)'));
+    var badge   = el('badge-' + catKey);
+    var section = el('cat-' + catKey);
+    if (!badge) return;
+    if (rows.length === 0) {
+      badge.textContent = '✓';
+      badge.className   = 'cat-badge badge-ok';
+      if (!body.querySelector('.empty-cat')) {
+        var empty = document.createElement('div');
+        empty.className   = 'empty-cat';
+        empty.textContent = 'No issues found';
+        body.appendChild(empty);
+      }
+      if (section) section.classList.add('collapsed');
+    } else {
+      var hasError = rows.some(function (r) { return r.classList.contains('sev-error'); });
+      var hasWarn  = rows.some(function (r) { return r.classList.contains('sev-warning'); });
+      if (hasError) {
+        badge.textContent = rows.length + ' error' + (rows.length > 1 ? 's' : '');
+        badge.className   = 'cat-badge badge-error';
+      } else if (hasWarn) {
+        badge.textContent = rows.length + ' warn' + (rows.length > 1 ? 's' : '');
+        badge.className   = 'cat-badge badge-warn';
+      } else {
+        badge.textContent = rows.length + ' info';
+        badge.className   = 'cat-badge badge-info';
+      }
+    }
+  }
+
+  function renderFinding(catKey, finding) {
     var row = document.createElement('div');
     row.className = 'finding-row sev-' + finding.severity;
 
@@ -113,17 +169,35 @@
     msg.textContent = finding.message;
     row.appendChild(msg);
 
+    var dismiss = document.createElement('button');
+    dismiss.className = 'btn-dismiss';
+    dismiss.title     = 'Dismiss';
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', function (e) {
+      e.stopPropagation();
+      _dismissed.add(findingId(finding));
+      saveDismissed();
+      row.classList.add('dismissed');
+      var body = row.closest('.cat-body');
+      if (body) refreshBadge(catKey, body);
+    });
+    row.appendChild(dismiss);
+
     return row;
   }
 
   function renderCategory(catKey, findings) {
     var body = el('body-' + catKey);
     body.innerHTML = '';
-    setBadge(catKey, findings);
 
     var section = el('cat-' + catKey);
 
-    if (findings.length === 0) {
+    // Filter out findings the user previously dismissed
+    var active = findings.filter(function (f) { return !_dismissed.has(findingId(f)); });
+
+    setBadge(catKey, active);
+
+    if (active.length === 0) {
       var empty = document.createElement('div');
       empty.className   = 'empty-cat';
       empty.textContent = 'No issues found';
@@ -132,7 +206,7 @@
       return;
     }
 
-    var sorted = findings.slice().sort(function (a, b) {
+    var sorted = active.slice().sort(function (a, b) {
       var order = { error: 0, warning: 1, info: 2 };
       var diff  = (order[a.severity] || 2) - (order[b.severity] || 2);
       if (diff !== 0) return diff;
@@ -140,7 +214,7 @@
     });
 
     sorted.forEach(function (f) {
-      body.appendChild(renderFinding(f));
+      body.appendChild(renderFinding(catKey, f));
     });
 
     section.classList.remove('collapsed');
