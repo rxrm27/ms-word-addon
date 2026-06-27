@@ -6,6 +6,7 @@ var aliasMap          = {};   // manually added by user
 var autoAliasMap      = {};   // auto-computed: phrases sharing a content word with canonical
 var canonicalOverride = {};   // user-edited canonical phrase per number
 var dismissedConflicts = {};  // conflicts user has dismissed { "num:100": true, "ph:map": true }
+var invalidOverrides   = {};  // numbers whose canonicalOverride fails subset check (not persisted)
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function setStatus(msg, cls) {
 
 function getAllConflicts() {
   if (!scanResult) return [];
-  return scanResult.conflicts.concat(detectOverrideConflicts());
+  return scanResult.conflicts.concat(detectOverrideConflicts()).concat(detectInvalidOverrideConflicts());
 }
 
 function refreshStatus() {
@@ -102,13 +103,36 @@ function getOriginalCanonical(number) {
   return row ? row.phrase : '';
 }
 
+// Returns true if every content word in newPhrase appears (stemmed) in originalPhrase.
+// Subset = valid narrowing (e.g. "method" ⊂ "technically a method"). Different root = invalid.
+// If originalPhrase is empty (number not yet in document), no constraint → returns true.
+function isValidSubset(newPhrase, originalPhrase) {
+  if (!originalPhrase) return true;
+  var newWords  = getContentWords(newPhrase);
+  var origWords = getContentWords(originalPhrase);
+  if (newWords.length === 0) return false;
+  return newWords.every(function (w) { return origWords.indexOf(w) !== -1; });
+}
+
 function getCanonical(number) {
   return canonicalOverride[number] || getOriginalCanonical(number);
 }
 
 function saveCanonical(number, newPhrase) {
+  if (getContentWords(newPhrase).length === 0) {
+    var cell = document.querySelector('[data-number="' + number + '"] .component-editable');
+    if (cell) cell.textContent = getCanonical(number);
+    setStatus('Component name must contain at least one meaningful word.', 'error');
+    return;
+  }
   var oldCanonical = getCanonical(number);
   canonicalOverride[number] = newPhrase;
+  var original = getOriginalCanonical(number);
+  if (!isValidSubset(newPhrase, original)) {
+    invalidOverrides[number] = true;
+  } else {
+    delete invalidOverrides[number];
+  }
   if (aliasMap[number]) {
     var idx = aliasMap[number].indexOf(oldCanonical);
     if (idx !== -1) aliasMap[number][idx] = newPhrase;
@@ -168,10 +192,28 @@ function detectOverrideConflicts() {
   return out;
 }
 
+// Returns canonical_mismatch conflicts for any override that fails subset check.
+function detectInvalidOverrideConflicts() {
+  var out = [];
+  Object.keys(invalidOverrides).forEach(function (num) {
+    if (!invalidOverrides[num]) return;
+    out.push({
+      type: 'canonical_mismatch',
+      number: num,
+      override: canonicalOverride[num] || '',
+      original: getOriginalCanonical(num),
+      synthetic: true
+    });
+  });
+  return out;
+}
+
 // ── Dismiss helpers ───────────────────────────────────────────────────────────
 
 function conflictKey(c) {
-  return c.type === 'number_reuse' ? 'num:' + c.number : 'ph:' + c.phrase;
+  if (c.type === 'number_reuse')      return 'num:' + c.number;
+  if (c.type === 'canonical_mismatch') return 'cm:'  + c.number;
+  return 'ph:' + c.phrase;
 }
 
 function dismissConflict(c) {
@@ -189,7 +231,23 @@ function scanDocument() {
     var body = ctx.document.body;
     body.load('text');
     return ctx.sync().then(function () {
+      dismissedConflicts = {};
+      saveState();
       scanResult = NumberingEngine.analyze(body.text);
+      // Prune overrides for numbers no longer in document
+      var currentNumbers = {};
+      scanResult.referenceTable.forEach(function (r) { currentNumbers[r.number] = true; });
+      Object.keys(canonicalOverride).forEach(function (num) {
+        if (!currentNumbers[num]) { delete canonicalOverride[num]; delete invalidOverrides[num]; }
+      });
+      // Re-validate surviving overrides against new first occurrences
+      Object.keys(canonicalOverride).forEach(function (num) {
+        if (!isValidSubset(canonicalOverride[num], getOriginalCanonical(num))) {
+          invalidOverrides[num] = true;
+        } else {
+          delete invalidOverrides[num];
+        }
+      });
       buildAutoAliases(scanResult);
       renderResults(scanResult);
       refreshStatus();
@@ -214,8 +272,9 @@ function filterConflicts(conflicts) {
     if (c.type === 'number_reuse') {
       var accepted  = getAllAccepted(c.number);
       var remaining = c.phrases.filter(function (p) { return accepted.indexOf(p) === -1; });
-      return remaining.length > 1;
+      return remaining.length > 0;
     }
+    if (c.type === 'canonical_mismatch') return true;  // always show; cleared on re-scan
     if (c.type === 'phrase_reuse') {
       if (c.synthetic) return true;  // override conflicts: all numbers are active
       var active = c.numbers.filter(function (num) {
@@ -263,7 +322,20 @@ function renderConflicts(conflicts) {
     })(c);
     tdDismiss.appendChild(dismissBtn);
 
-    if (c.type === 'number_reuse') {
+    if (c.type === 'canonical_mismatch') {
+      var cmNum = document.createElement('span');
+      cmNum.className = 'conflict-num';
+      cmNum.textContent = c.number;
+      tdLabel.appendChild(cmNum);
+
+      var cmChip = document.createElement('span');
+      cmChip.className = 'phrase-chip';
+      cmChip.style.cssText = 'background:#fff3cd;color:#856404;border:1px solid #f0ad4e;';
+      cmChip.title = 'Dictionary name "' + c.override + '" does not match first occurrence "' + c.original + '"';
+      cmChip.textContent = '⚠ "' + c.override + '" ≠ "' + c.original + '"';
+      tdChips.appendChild(cmChip);
+
+    } else if (c.type === 'number_reuse') {
       var numSpan = document.createElement('span');
       numSpan.className = 'conflict-num';
       numSpan.textContent = c.number;
@@ -341,6 +413,10 @@ function renderDictionary(table) {
     tdPhrase.contentEditable = true;
     tdPhrase.className = 'component-editable';
     tdPhrase.title = 'Click to edit component name';
+    if (invalidOverrides[row.number]) {
+      tdPhrase.classList.add('invalid-canonical');
+      tdPhrase.title = 'Name does not match first occurrence in document. Revert or edit the document text.';
+    }
     tdPhrase.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
       if (e.key === 'Escape') { this.textContent = getCanonical(row.number); this.blur(); }
@@ -462,18 +538,27 @@ function doRemoveAlias(number, phrase, canonical) {
 // ── Scroll to phrase in document ─────────────────────────────────────────────
 
 function scrollToPhrase(phrase, number) {
-  var term = phrase + ' ' + number;
-  setStatus('Scrolling to: ' + term + '...');
+  var termDirect = phrase + ' ' + number;
+  var termParen  = phrase + ' (' + number + ')';
+  setStatus('Scrolling to: ' + termDirect + '...');
   Word.run(function (ctx) {
-    var ranges = ctx.document.body.search(term, { matchCase: false });
+    var ranges = ctx.document.body.search(termDirect, { matchCase: false });
     ranges.load('items');
     return ctx.sync().then(function () {
       if (ranges.items.length > 0) {
         ranges.items[0].select();
-        return ctx.sync().then(function () { setStatus('Found: ' + term, 'success'); });
-      } else {
-        setStatus('Not found in document: ' + term, 'error');
+        return ctx.sync().then(function () { setStatus('Found: ' + termDirect, 'success'); });
       }
+      // Fallback: parenthesized form e.g. "module (200)"
+      var rangesParen = ctx.document.body.search(termParen, { matchCase: false });
+      rangesParen.load('items');
+      return ctx.sync().then(function () {
+        if (rangesParen.items.length > 0) {
+          rangesParen.items[0].select();
+          return ctx.sync().then(function () { setStatus('Found: ' + termParen, 'success'); });
+        }
+        setStatus('Not found in document: ' + termDirect, 'error');
+      });
     });
   }).catch(function (err) {
     setStatus('Error scrolling: ' + err.message, 'error');
@@ -492,6 +577,7 @@ function markConflicts() {
   var searches = [];
 
   activeConflicts.forEach(function (conflict) {
+    if (conflict.type === 'canonical_mismatch') return;  // dictionary-only error, no document location
     if (conflict.type === 'number_reuse') {
       var accepted = getAllAccepted(conflict.number);
       var phrases  = accepted.length > 0
@@ -553,6 +639,7 @@ function generateTable() {
   var tableData = scanResult.referenceTable;
   if (tableData.length === 0) { setStatus('No references found to tabulate.', 'error'); return; }
 
+  document.getElementById('btn-table').disabled = true;
   setStatus('Inserting reference table...');
   Word.run(function (ctx) {
     var body = ctx.document.body;
@@ -564,7 +651,7 @@ function generateTable() {
     table.style = 'Table Grid';
     table.rows.getFirst().font.bold = true;
     return ctx.sync().then(function () {
-      setStatus('Reference table inserted at end of document (' + tableData.length + ' entries).', 'success');
+      setStatus('Reference table inserted (' + tableData.length + ' entries). Re-scan to regenerate.', 'success');
     });
   }).catch(function (err) {
     setStatus('Error inserting table: ' + err.message, 'error');

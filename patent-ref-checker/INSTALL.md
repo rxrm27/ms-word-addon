@@ -87,6 +87,6 @@ Click **Insert Reference Table** → a "Reference Numerals" heading and two-colu
 
 ## How it works (technical summary)
 
-- Add-in files are hosted at `https://rxrm27.github.io/ms-word-addon/`
+- Add-in files are hosted at `https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/`
 - `manifest.xml` tells Word where to find the files — it's the only file you need to distribute
 - No server to run, no software to install, no ongoing maintenance

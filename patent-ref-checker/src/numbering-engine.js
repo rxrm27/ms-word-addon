@@ -26,7 +26,7 @@
   }
 
   // Words that are never a component name start — stripped from captured phrase prefix.
-  var STOPWORD = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said)$/i;
+  var STOPWORD = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said|may|can|via|into|onto|about|within|between|through|across|among|upon|after|before|during|whether|wherein|thereby|whereby|thereof|therein|therefor|therefore)$/i;
 
   function normalizePhrase(raw) {
     var words = raw.toLowerCase().replace(/\s+/g, ' ').trim().split(' ');

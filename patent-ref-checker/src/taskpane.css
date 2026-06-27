@@ -231,3 +231,14 @@ button:disabled { opacity: 0.45; cursor: default; }
   box-shadow: inset 0 0 0 1px #1a73e8;
   padding: 2px 4px;
 }
+
+/* ── Invalid canonical override (fails subset check against first occurrence) ── */
+.invalid-canonical {
+  background: #fff3cd !important;
+  box-shadow: inset 0 0 0 1px #f0ad4e !important;
+  color: #856404;
+}
+.invalid-canonical:focus {
+  background: #fff3cd !important;
+  box-shadow: inset 0 0 0 1px #e0a800 !important;
+}

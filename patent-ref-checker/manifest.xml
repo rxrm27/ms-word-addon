@@ -31,7 +31,7 @@
   </Requirements>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://rxrm27.github.io/ms-word-addon/src/taskpane.html"/>
+    <SourceLocation DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/taskpane.html"/>
   </DefaultSettings>
 
   <Permissions>ReadWriteDocument</Permissions>
@@ -80,8 +80,8 @@
         <bt:Image id="Icon.80" DefaultValue="https://rxrm27.github.io/ms-word-addon/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url"  DefaultValue="https://rxrm27.github.io/ms-word-addon/src/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="https://rxrm27.github.io/ms-word-addon/src/taskpane.html"/>
+        <bt:Url id="Commands.Url"  DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://rxrm27.github.io/ms-word-addon/patent-ref-checker/src/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="Tab.Label"     DefaultValue="PatSync"/>

@@ -114,6 +114,33 @@
   assert(r9.referenceTable[1].number === '102', 'Sorted: second is 102');
   assert(r9.referenceTable[2].number === '104', 'Sorted: third is 104');
 
+  // ── Patent stopword stripping (STOPWORD sync) ──
+  section('Parse — patent stopword stripping');
+  var tSW1 = 'wherein the interface 102 receives data';
+  var eSW1 = NumberingEngine.parse(tSW1);
+  assert(eSW1.length === 1, '"wherein the interface 102" → 1 entry');
+  assert(eSW1[0].phrase === 'interface', '"wherein" and "the" stripped → phrase is "interface"');
+  assert(eSW1[0].number === '102', 'Number is 102');
+
+  var tSW2 = 'thereby allowing processor 200 to execute the method';
+  var eSW2 = NumberingEngine.parse(tSW2);
+  assert(eSW2.length === 1, '"thereby allowing processor 200" → 1 entry');
+  assert(eSW2[0].phrase === 'processor', '"thereby" and "allowing" stripped → phrase is "processor"');
+
+  var tSW3 = 'thereof the memory 300 stores configuration data';
+  var eSW3 = NumberingEngine.parse(tSW3);
+  assert(eSW3.length === 1, '"thereof the memory 300" → 1 entry');
+  assert(eSW3[0].phrase === 'memory', '"thereof" stripped → phrase is "memory"');
+
+  // ── Parenthesized reference numbers ──
+  section('Parse — parenthesized ref numbers');
+  var tParen = 'The processor (200) executes the method (300).';
+  var eParen = NumberingEngine.parse(tParen);
+  assert(eParen.some(function (e) { return e.number === '200'; }), '"processor (200)" parsed — number 200');
+  assert(eParen.some(function (e) { return e.number === '300'; }), '"method (300)" parsed — number 300');
+  var eP200 = eParen.filter(function (e) { return e.number === '200'; })[0];
+  assert(eP200 && eP200.phrase === 'processor', 'Phrase for 200 is "processor"');
+
   // ── Summary ──
   var summary = document.createElement('div');
   summary.id = 'summary';
