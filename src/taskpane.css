@@ -218,6 +218,12 @@ button:disabled { opacity: 0.45; cursor: default; }
 .alias-add-btn:hover { background: #1557b0; }
 
 /* ── Editable component cell ─────────────────────────────────────────────── */
+/* ── Dismiss button ──────────────────────────────────────────────────────── */
+.conflict-dismiss-cell { width: 22px; text-align: center; padding: 0 !important; vertical-align: middle; }
+.dismiss-btn { all: unset; cursor: pointer; color: #9aa0a6; font-size: 16px; padding: 2px 5px; border-radius: 3px; line-height: 1; display: inline-block; }
+.dismiss-btn:hover { color: #c62828; background: #fce8e6; }
+
+/* ── Editable component cell ─────────────────────────────────────────────── */
 .component-editable { cursor: text; outline: none; border-radius: 2px; }
 .component-editable:hover:not(:focus) { background: #f1f3f4; }
 .component-editable:focus {

@@ -34,6 +34,8 @@
     while (words.length > 1 && STOPWORD.test(words[0])) words.shift();
     // One more article strip in case of "and an X" pattern.
     if (words.length > 1 && /^(?:a|an|the)$/.test(words[0])) words.shift();
+    // Discard if sole remaining word is still a stopword (e.g. "and", "or")
+    if (words.length === 1 && STOPWORD.test(words[0])) return '';
     return words.join(' ');
   }
 

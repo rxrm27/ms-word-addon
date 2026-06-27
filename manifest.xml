@@ -42,7 +42,8 @@
         <DesktopFormFactor>
           <FunctionFile resid="Commands.Url"/>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
-            <OfficeTab id="TabHome">
+            <CustomTab id="PatSyncTab">
+              <Label resid="Tab.Label"/>
               <Group id="PatentToolsGroup">
                 <Label resid="Group.Label"/>
                 <Icon>
@@ -67,7 +68,7 @@
                   </Action>
                 </Control>
               </Group>
-            </OfficeTab>
+            </CustomTab>
           </ExtensionPoint>
         </DesktopFormFactor>
       </Host>
@@ -83,8 +84,9 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://rxrm27.github.io/ms-word-addon/src/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
+        <bt:String id="Tab.Label"     DefaultValue="PatSync"/>
         <bt:String id="Group.Label"   DefaultValue="Patent Tools"/>
-        <bt:String id="Btn.Label"     DefaultValue="Check References"/>
+        <bt:String id="Btn.Label"     DefaultValue="Check Ref. Num"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="Btn.Tooltip" DefaultValue="Open the patent reference number checker"/>

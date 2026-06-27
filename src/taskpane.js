@@ -1,15 +1,17 @@
 // src/taskpane.js
 'use strict';
 
-var scanResult       = null;
-var aliasMap         = {};   // manually added by user
-var autoAliasMap     = {};   // auto-computed: phrases that share a content word with canonical
-var canonicalOverride = {};  // user-edited canonical phrase per number
+var scanResult        = null;
+var aliasMap          = {};   // manually added by user
+var autoAliasMap      = {};   // auto-computed: phrases sharing a content word with canonical
+var canonicalOverride = {};   // user-edited canonical phrase per number
+var dismissedConflicts = {};  // conflicts user has dismissed { "num:100": true, "ph:map": true }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 if (typeof Office !== 'undefined') {
   Office.onReady(function (info) {
+    loadState();  // restore persisted state before wiring buttons
     if (info.host === Office.HostType.Word) {
       document.getElementById('btn-scan').onclick = scanDocument;
       document.getElementById('btn-mark').onclick = markConflicts;
@@ -22,6 +24,31 @@ if (typeof Office !== 'undefined') {
   setStatus('Running outside Word — Office.js not available.', 'error');
 }
 
+// ── Persistence (localStorage, 30-day TTL) ───────────────────────────────────
+
+function saveState() {
+  try {
+    localStorage.setItem('patsync_v1', JSON.stringify({
+      ts: Date.now(),
+      dismissed: dismissedConflicts,
+      aliasMap: aliasMap,
+      canonicalOverride: canonicalOverride
+    }));
+  } catch (e) {}
+}
+
+function loadState() {
+  try {
+    var raw = localStorage.getItem('patsync_v1');
+    if (!raw) return;
+    var s = JSON.parse(raw);
+    if (Date.now() - s.ts > 30 * 86400 * 1000) { localStorage.removeItem('patsync_v1'); return; }
+    dismissedConflicts = s.dismissed      || {};
+    aliasMap           = s.aliasMap       || {};
+    canonicalOverride  = s.canonicalOverride || {};
+  } catch (e) {}
+}
+
 // ── Status helper ────────────────────────────────────────────────────────────
 
 function setStatus(msg, cls) {
@@ -30,9 +57,14 @@ function setStatus(msg, cls) {
   el.className = cls || '';
 }
 
+function getAllConflicts() {
+  if (!scanResult) return [];
+  return scanResult.conflicts.concat(detectOverrideConflicts());
+}
+
 function refreshStatus() {
   if (!scanResult) return;
-  var filtered = filterConflicts(scanResult.conflicts);
+  var filtered = filterConflicts(getAllConflicts());
   var msg = filtered.length === 0
     ? 'No conflicts found. ' + scanResult.referenceTable.length + ' references detected.'
     : filtered.length + ' conflict(s) found. ' + scanResult.referenceTable.length + ' total references.';
@@ -42,13 +74,12 @@ function refreshStatus() {
 
 // ── Auto-alias: content-word matching ────────────────────────────────────────
 
-// Words that carry no identifying meaning.
-var CONTENT_STOP = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|had|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said|may|can|its|via|into|onto|about|within|between|through|across|among|upon|after|before|during|whether|wherein|thereby|whereby|thereof|therein|therefor|therefore)$/i;
+var CONTENT_STOP = /^(?:a|an|the|and|or|but|nor|for|so|as|to|from|of|in|on|at|by|with|not|is|are|was|were|be|been|being|also|both|either|neither|such|each|every|any|all|some|then|further|thus|hence|comprises?|includes?|has|have|had|contain|which|that|this|these|those|when|if|limited|no|its|their|our|said|may|can|via|into|onto|about|within|between|through|across|among|upon|after|before|during|whether|wherein|thereby|whereby|thereof|therein|therefor|therefore)$/i;
 
 function stemWord(w) {
-  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y'; // abilities→ability
-  if (w.length > 4 && w.endsWith('ses')) return w.slice(0, -2);        // processes→process
-  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1); // users→user
+  if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+  if (w.length > 4 && w.endsWith('ses')) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
   return w;
 }
 
@@ -61,7 +92,6 @@ function getContentWords(phrase) {
 function sharesContentWord(phrase, canonical) {
   var phraseWords    = getContentWords(phrase);
   var canonicalWords = getContentWords(canonical);
-  // Phrases with zero content words are regex garbage — treat as auto-safe.
   if (phraseWords.length === 0) return true;
   return phraseWords.some(function (w) { return canonicalWords.indexOf(w) !== -1; });
 }
@@ -79,24 +109,22 @@ function getCanonical(number) {
 function saveCanonical(number, newPhrase) {
   var oldCanonical = getCanonical(number);
   canonicalOverride[number] = newPhrase;
-  // Replace old canonical in aliasMap if present
   if (aliasMap[number]) {
     var idx = aliasMap[number].indexOf(oldCanonical);
     if (idx !== -1) aliasMap[number][idx] = newPhrase;
   }
+  saveState();
   if (scanResult) { buildAutoAliases(scanResult); renderResults(scanResult); refreshStatus(); }
 }
 
 function buildAutoAliases(result) {
   autoAliasMap = {};
-  var n2p      = result.dictionary.numberToPhrase;
-
+  var n2p = result.dictionary.numberToPhrase;
   Object.keys(n2p).forEach(function (num) {
     var phrases   = n2p[num];
     if (phrases.length <= 1) return;
     var canonical = getCanonical(num);
     if (!canonical) return;
-
     phrases.forEach(function (p) {
       if (p === canonical) return;
       if (sharesContentWord(p, canonical)) {
@@ -107,13 +135,50 @@ function buildAutoAliases(result) {
   });
 }
 
-// All accepted phrases for a number (manual + auto).
 function getAllAccepted(number) {
   var manual   = aliasMap[number]     || [];
   var auto     = autoAliasMap[number] || [];
   var combined = manual.slice();
   auto.forEach(function (p) { if (combined.indexOf(p) === -1) combined.push(p); });
   return combined;
+}
+
+// ── Override-conflict detection ───────────────────────────────────────────────
+
+// Returns synthetic phrase_reuse conflicts when two numbers share the same canonicalOverride.
+function detectOverrideConflicts() {
+  var phraseToNums = {};
+  Object.keys(canonicalOverride).forEach(function (num) {
+    var phrase = canonicalOverride[num];
+    if (!phraseToNums[phrase]) phraseToNums[phrase] = [];
+    if (phraseToNums[phrase].indexOf(num) === -1) phraseToNums[phrase].push(num);
+  });
+  var enginePhrases = {};
+  if (scanResult) {
+    scanResult.conflicts.forEach(function (c) {
+      if (c.type === 'phrase_reuse') enginePhrases[c.phrase] = true;
+    });
+  }
+  var out = [];
+  Object.keys(phraseToNums).forEach(function (phrase) {
+    if (phraseToNums[phrase].length > 1 && !enginePhrases[phrase]) {
+      out.push({ type: 'phrase_reuse', phrase: phrase, numbers: phraseToNums[phrase], synthetic: true });
+    }
+  });
+  return out;
+}
+
+// ── Dismiss helpers ───────────────────────────────────────────────────────────
+
+function conflictKey(c) {
+  return c.type === 'number_reuse' ? 'num:' + c.number : 'ph:' + c.phrase;
+}
+
+function dismissConflict(c) {
+  dismissedConflicts[conflictKey(c)] = true;
+  saveState();
+  renderConflicts(getAllConflicts());
+  refreshStatus();
 }
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
@@ -138,20 +203,21 @@ function scanDocument() {
 // ── Render results ───────────────────────────────────────────────────────────
 
 function renderResults(result) {
-  renderConflicts(result.conflicts);
+  renderConflicts(getAllConflicts());
   renderDictionary(result.referenceTable);
 }
 
-// Conflicts where unresolved phrase count > 1 after applying both alias maps.
+// Filter: dismissed conflicts hidden; number_reuse resolved by aliases; phrase_reuse by override.
 function filterConflicts(conflicts) {
   return conflicts.filter(function (c) {
+    if (dismissedConflicts[conflictKey(c)]) return false;
     if (c.type === 'number_reuse') {
       var accepted  = getAllAccepted(c.number);
       var remaining = c.phrases.filter(function (p) { return accepted.indexOf(p) === -1; });
       return remaining.length > 1;
     }
     if (c.type === 'phrase_reuse') {
-      // Exclude numbers whose canonical was overridden to something other than this phrase
+      if (c.synthetic) return true;  // override conflicts: all numbers are active
       var active = c.numbers.filter(function (num) {
         return !canonicalOverride[num] || canonicalOverride[num] === c.phrase;
       });
@@ -177,27 +243,39 @@ function renderConflicts(conflicts) {
   table.className = 'conflict-table';
 
   visible.forEach(function (c) {
-    var tr       = document.createElement('tr');
+    var tr = document.createElement('tr');
     tr.className = 'conflict-row';
 
-    var tdLabel  = document.createElement('td');
+    var tdLabel = document.createElement('td');
     tdLabel.className = 'conflict-label-cell';
-    var tdChips  = document.createElement('td');
+    var tdChips = document.createElement('td');
     tdChips.className = 'conflict-chips-cell';
+    var tdDismiss = document.createElement('td');
+    tdDismiss.className = 'conflict-dismiss-cell';
+
+    // Dismiss button
+    var dismissBtn = document.createElement('button');
+    dismissBtn.className = 'dismiss-btn';
+    dismissBtn.textContent = '×';
+    dismissBtn.title = 'Dismiss this conflict';
+    dismissBtn.onclick = (function (conflict) {
+      return function () { dismissConflict(conflict); };
+    })(c);
+    tdDismiss.appendChild(dismissBtn);
 
     if (c.type === 'number_reuse') {
-      var numSpan       = document.createElement('span');
+      var numSpan = document.createElement('span');
       numSpan.className = 'conflict-num';
       numSpan.textContent = c.number;
       tdLabel.appendChild(numSpan);
 
-      var accepted       = getAllAccepted(c.number);
+      var accepted = getAllAccepted(c.number);
       var displayPhrases = accepted.length > 0
         ? c.phrases.filter(function (p) { return accepted.indexOf(p) === -1; })
         : c.phrases;
 
       displayPhrases.forEach(function (p) {
-        var chip       = document.createElement('span');
+        var chip = document.createElement('span');
         chip.className = 'phrase-chip clickable-chip';
         chip.textContent = p;
         chip.title = 'Click to scroll to in document';
@@ -207,16 +285,19 @@ function renderConflicts(conflicts) {
         tdChips.appendChild(chip);
       });
     } else {
-      var phraseEm       = document.createElement('em');
+      var phraseEm = document.createElement('em');
       phraseEm.className = 'conflict-phrase';
       phraseEm.textContent = '"' + c.phrase + '"';
       tdLabel.appendChild(phraseEm);
 
-      var activeNums = c.numbers.filter(function (n) {
-        return !canonicalOverride[n] || canonicalOverride[n] === c.phrase;
-      });
-      activeNums.forEach(function (n) {
-        var chip       = document.createElement('span');
+      var displayNums = c.synthetic
+        ? c.numbers
+        : c.numbers.filter(function (n) {
+            return !canonicalOverride[n] || canonicalOverride[n] === c.phrase;
+          });
+
+      displayNums.forEach(function (n) {
+        var chip = document.createElement('span');
         chip.className = 'num-chip clickable-chip';
         chip.textContent = n;
         chip.title = 'Click to scroll to in document';
@@ -229,6 +310,7 @@ function renderConflicts(conflicts) {
 
     tr.appendChild(tdLabel);
     tr.appendChild(tdChips);
+    tr.appendChild(tdDismiss);
     table.appendChild(tr);
   });
 
@@ -251,7 +333,7 @@ function renderDictionary(table) {
     var tr = document.createElement('tr');
     tr.dataset.number = row.number;
 
-    var tdNum    = document.createElement('td');
+    var tdNum = document.createElement('td');
     tdNum.textContent = row.number;
 
     var tdPhrase = document.createElement('td');
@@ -270,16 +352,16 @@ function renderDictionary(table) {
       };
     })(row.number));
 
-    var tdAliases    = document.createElement('td');
+    var tdAliases = document.createElement('td');
     tdAliases.className = 'alias-cell';
-    tdAliases.id    = 'aliases-' + row.number;
+    tdAliases.id = 'aliases-' + row.number;
     renderAliasChips(tdAliases, row.number, canonical);
 
-    var tdEdit  = document.createElement('td');
+    var tdEdit = document.createElement('td');
     tdEdit.className = 'edit-cell';
     var editBtn = document.createElement('button');
     editBtn.className = 'icon-btn';
-    editBtn.title     = 'Add alias for ' + row.number;
+    editBtn.title = 'Add alias for ' + row.number;
     editBtn.textContent = '✏';
     editBtn.onclick = (function (num) {
       return function () { toggleAliasInput(num); };
@@ -292,27 +374,26 @@ function renderDictionary(table) {
     tr.appendChild(tdEdit);
     tbody.appendChild(tr);
 
-    // Alias input row (hidden by default)
-    var inputRow    = document.createElement('tr');
-    inputRow.id     = 'alias-input-row-' + row.number;
+    var inputRow = document.createElement('tr');
+    inputRow.id = 'alias-input-row-' + row.number;
     inputRow.className = 'alias-input-row hidden';
 
     var inputTd = document.createElement('td');
     inputTd.colSpan = 4;
 
-    var input        = document.createElement('input');
-    input.type       = 'text';
-    input.className  = 'alias-input';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'alias-input';
     input.placeholder = 'e.g. the system';
-    input.id         = 'alias-text-' + row.number;
-    input.onkeydown  = (function (num, canon) {
+    input.id = 'alias-text-' + row.number;
+    input.onkeydown = (function (num, canon) {
       return function (e) { if (e.key === 'Enter') doAddAlias(num, canon); };
     })(row.number, canonical);
 
-    var addBtn       = document.createElement('button');
+    var addBtn = document.createElement('button');
     addBtn.className = 'alias-add-btn';
     addBtn.textContent = 'Add';
-    addBtn.onclick   = (function (num, canon) {
+    addBtn.onclick = (function (num, canon) {
       return function () { doAddAlias(num, canon); };
     })(row.number, canonical);
 
@@ -325,21 +406,18 @@ function renderDictionary(table) {
 
 function renderAliasChips(container, number, canonical) {
   container.innerHTML = '';
-  // Show only manually added aliases (auto ones are invisible background filtering).
   var aliases = (aliasMap[number] || []).filter(function (a) { return a !== canonical; });
   aliases.forEach(function (alias) {
     var chip = document.createElement('span');
     chip.className = 'alias-chip';
     chip.appendChild(document.createTextNode(alias));
-
-    var x         = document.createElement('span');
-    x.className   = 'chip-remove';
+    var x = document.createElement('span');
+    x.className = 'chip-remove';
     x.textContent = '×';
-    x.title       = 'Remove alias';
-    x.onclick     = (function (num, a, canon) {
+    x.title = 'Remove alias';
+    x.onclick = (function (num, a, canon) {
       return function () { doRemoveAlias(num, a, canon); };
     })(number, alias, canonical);
-
     chip.appendChild(x);
     container.appendChild(chip);
   });
@@ -360,17 +438,14 @@ function doAddAlias(number, canonical) {
   if (!inputEl) return;
   var val = inputEl.value.trim().toLowerCase();
   if (!val) return;
-
   if (!aliasMap[number]) aliasMap[number] = [];
   if (aliasMap[number].indexOf(canonical) === -1) aliasMap[number].push(canonical);
   if (aliasMap[number].indexOf(val)       === -1) aliasMap[number].push(val);
-
   inputEl.value = '';
-
   var cell = document.getElementById('aliases-' + number);
   if (cell) renderAliasChips(cell, number, canonical);
-
-  if (scanResult) { renderConflicts(scanResult.conflicts); refreshStatus(); }
+  saveState();
+  if (scanResult) { renderConflicts(getAllConflicts()); refreshStatus(); }
 }
 
 function doRemoveAlias(number, phrase, canonical) {
@@ -378,11 +453,10 @@ function doRemoveAlias(number, phrase, canonical) {
   aliasMap[number] = aliasMap[number].filter(function (a) { return a !== phrase; });
   var nonCanonical = aliasMap[number].filter(function (a) { return a !== canonical; });
   if (nonCanonical.length === 0) delete aliasMap[number];
-
   var cell = document.getElementById('aliases-' + number);
   if (cell) renderAliasChips(cell, number, canonical);
-
-  if (scanResult) { renderConflicts(scanResult.conflicts); refreshStatus(); }
+  saveState();
+  if (scanResult) { renderConflicts(getAllConflicts()); refreshStatus(); }
 }
 
 // ── Scroll to phrase in document ─────────────────────────────────────────────
@@ -411,11 +485,10 @@ function scrollToPhrase(phrase, number) {
 function markConflicts() {
   if (!scanResult) { setStatus('Run Scan first.', 'error'); return; }
 
-  var activeConflicts = filterConflicts(scanResult.conflicts);
+  var activeConflicts = filterConflicts(getAllConflicts());
   if (!activeConflicts.length) { setStatus('No active conflicts to mark.', 'error'); return; }
 
   setStatus('Adding comments to document...');
-
   var searches = [];
 
   activeConflicts.forEach(function (conflict) {
@@ -432,8 +505,13 @@ function markConflicts() {
         });
       });
     } else if (conflict.type === 'phrase_reuse') {
-      conflict.numbers.forEach(function (num) {
-        var others = conflict.numbers.filter(function (n) { return n !== num; });
+      var nums = conflict.synthetic
+        ? conflict.numbers
+        : conflict.numbers.filter(function (n) {
+            return !canonicalOverride[n] || canonicalOverride[n] === conflict.phrase;
+          });
+      nums.forEach(function (num) {
+        var others = nums.filter(function (n) { return n !== num; });
         searches.push({
           term:    conflict.phrase + ' ' + num,
           comment: 'CONFLICT: "' + conflict.phrase + '" also numbered as ' + others.join(', ')
@@ -472,25 +550,19 @@ function markConflicts() {
 
 function generateTable() {
   if (!scanResult) { setStatus('Run Scan first.', 'error'); return; }
-
   var tableData = scanResult.referenceTable;
   if (tableData.length === 0) { setStatus('No references found to tabulate.', 'error'); return; }
 
   setStatus('Inserting reference table...');
-
   Word.run(function (ctx) {
     var body = ctx.document.body;
-
     var heading = body.insertParagraph('Reference Numerals', Word.InsertLocation.end);
     heading.styleBuiltIn = Word.Style.heading2;
-
     var values = [['Reference Number', 'Component Name']];
-    tableData.forEach(function (row) { values.push([row.number, row.phrase]); });
-
+    tableData.forEach(function (row) { values.push([row.number, getCanonical(row.number)]); });
     var table = body.insertTable(values.length, 2, Word.InsertLocation.end, values);
     table.style = 'Table Grid';
     table.rows.getFirst().font.bold = true;
-
     return ctx.sync().then(function () {
       setStatus('Reference table inserted at end of document (' + tableData.length + ' entries).', 'success');
     });
