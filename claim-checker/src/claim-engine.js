@@ -34,7 +34,9 @@ var ClaimEngine = (function () {
     'purpose', 'basis', 'case', 'manner', 'way', 'same', 'fact', 'time',
     'group', 'formula', 'range', 'form', 'ratio', 'rate', 'amount', 'order',
     // Quantifier words — "the one or more X", "the at least one X", "the plurality of X"
-    'one', 'least', 'more', 'plurality', 'number', 'set'
+    'one', 'least', 'more', 'plurality', 'number', 'set',
+    // Structural/list words common in CRM claims — "perform the steps of", "the following"
+    'steps', 'acts', 'operations', 'instructions', 'following'
   ]);
 
   // Adjectives that modify claim nouns but are not the head noun
@@ -409,19 +411,25 @@ var ClaimEngine = (function () {
     var findings = [];
     var text     = c.rawText;
 
-    // Start with introduced set — inherit from single parent for single-dep claims
+    // Start with introduced set — inherit union of all parents (handles single-dep and multi-dep)
     var introduced = new Set();
-    if (c.isDependent && !c.isMultiDep && c.parentClaims.length === 1) {
-      var parent = null;
-      for (var pi = 0; pi < claims.length; pi++) {
-        if (claims[pi].number === c.parentClaims[0]) { parent = claims[pi]; break; }
-      }
-      if (parent && parent._introduced) parent._introduced.forEach(function (n) { introduced.add(n); });
+    if (c.isDependent && c.parentClaims.length > 0) {
+      c.parentClaims.forEach(function (pNum) {
+        for (var pi = 0; pi < claims.length; pi++) {
+          if (claims[pi].number === pNum && claims[pi]._introduced) {
+            claims[pi]._introduced.forEach(function (n) { introduced.add(n); });
+            break;
+          }
+        }
+      });
     }
 
     // Collect introductions — rebuild regexes each call to reset lastIndex
-    var introRe   = new RegExp(_INTRO_SRC,     'gi');
+    var introRe    = new RegExp(_INTRO_SRC,     'gi');
     var altIntroRe = new RegExp(_ALT_INTRO_SRC, 'gi');
+    // Gerund direct-object pattern: "obtaining spatial data", "receiving a request" etc.
+    // Captures bare nouns (mass nouns) used as direct objects of method/CRM step verbs.
+    var gerundRe = /\b(?:obtaining|generating|receiving|storing|computing|creating|collecting|determining|extracting|identifying|detecting|processing|transmitting|calculating|fetching|reading|writing|selecting|retrieving|encoding|decoding|converting|analyzing|evaluating|monitoring|measuring|comparing|allocating|scheduling|authenticating|validating|compiling|executing|initiating|performing|applying)\s+([a-z][a-z\-]+(?:\s+(?!of\b|from\b|in\b|to\b|with\b|by\b|for\b|at\b|and\b|or\b|via\b|into\b|on\b)[a-z][a-z\-]+){0,2})/gi;
     var m;
 
     function addPhrase(raw) {
@@ -435,6 +443,8 @@ var ClaimEngine = (function () {
     while ((m = introRe.exec(text)) !== null)   addPhrase(m[1]);
     // "one or more X" / "at least one X" introductions
     while ((m = altIntroRe.exec(text)) !== null) addPhrase(m[1]);
+    // Gerund bare-noun introductions (mass nouns in method/CRM steps)
+    while ((m = gerundRe.exec(text)) !== null)  addPhrase(m[1]);
 
     c._introduced = new Set(introduced);
 
