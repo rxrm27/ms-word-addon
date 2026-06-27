@@ -405,7 +405,7 @@ var ClaimEngine = (function () {
   }
 
   function checkG07(c) {
-    if (!c.body) return null;
+    if (!c.body) return [];
     // "Wherein" clauses should not introduce new structural elements
     var findings = [];
     var whereins = c.body.match(/\bwherein\b[^;.]*/gi) || [];
@@ -759,6 +759,9 @@ var ClaimEngine = (function () {
       fi = checkSF04(c); if (fi) out.specialFormats.push(fi);
       fi = checkSF05(c, jurisdiction); if (fi) out.specialFormats.push(fi);
     });
+
+    // Strip any nulls that slipped in via .concat() on functions that returned null
+    Object.keys(out).forEach(function (k) { out[k] = out[k].filter(Boolean); });
 
     return out;
   }
