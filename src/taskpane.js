@@ -145,10 +145,19 @@ function renderResults(result) {
 // Conflicts where unresolved phrase count > 1 after applying both alias maps.
 function filterConflicts(conflicts) {
   return conflicts.filter(function (c) {
-    if (c.type !== 'number_reuse') return true;
-    var accepted  = getAllAccepted(c.number);
-    var remaining = c.phrases.filter(function (p) { return accepted.indexOf(p) === -1; });
-    return remaining.length > 1;
+    if (c.type === 'number_reuse') {
+      var accepted  = getAllAccepted(c.number);
+      var remaining = c.phrases.filter(function (p) { return accepted.indexOf(p) === -1; });
+      return remaining.length > 1;
+    }
+    if (c.type === 'phrase_reuse') {
+      // Exclude numbers whose canonical was overridden to something other than this phrase
+      var active = c.numbers.filter(function (num) {
+        return !canonicalOverride[num] || canonicalOverride[num] === c.phrase;
+      });
+      return active.length > 1;
+    }
+    return true;
   });
 }
 
@@ -203,7 +212,10 @@ function renderConflicts(conflicts) {
       phraseEm.textContent = '"' + c.phrase + '"';
       tdLabel.appendChild(phraseEm);
 
-      c.numbers.forEach(function (n) {
+      var activeNums = c.numbers.filter(function (n) {
+        return !canonicalOverride[n] || canonicalOverride[n] === c.phrase;
+      });
+      activeNums.forEach(function (n) {
         var chip       = document.createElement('span');
         chip.className = 'num-chip clickable-chip';
         chip.textContent = n;
